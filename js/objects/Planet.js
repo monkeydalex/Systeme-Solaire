@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createNoise2D } from 'simplex-noise';
 import { fallbackColors } from '../data/planetData.js';
+import { createSunMaterial } from './SunMaterial.js';
 
 const noise2D = createNoise2D();
 
@@ -15,7 +16,10 @@ export class Planet {
         this.angle = Math.random() * Math.PI * 2;
         
         this.group = new THREE.Group();
+        // Groupe incliné selon l'axe réel de la planète (porte mesh, nuages, anneaux)
+        this.tiltGroup = new THREE.Group();
         this.mesh = null;
+        this.sunMaterial = null;
         this.cloudsMesh = null;
         this.atmosphereMesh = null;
         this.orbitMesh = null;
@@ -35,10 +39,9 @@ export class Planet {
 
         let material;
         if (this.key === 'soleil') {
-            material = new THREE.MeshBasicMaterial({
-                map: texture,
-                color: 0xffffff
-            });
+            // Surface animée par shader (FBM) — la texture JPG n'est plus utilisée
+            material = createSunMaterial();
+            this.sunMaterial = material;
         } else {
             material = new THREE.MeshStandardMaterial({
                 map: texture,
@@ -58,7 +61,9 @@ export class Planet {
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.castShadow = this.key !== 'soleil';
         this.mesh.receiveShadow = this.key !== 'soleil';
-        this.group.add(this.mesh);
+        this.tiltGroup.rotation.z = THREE.MathUtils.degToRad(this.data.axialTilt || 0);
+        this.tiltGroup.add(this.mesh);
+        this.group.add(this.tiltGroup);
 
         // 3. Cas spécifiques
         // A. Soleil (Lumière + Lueur)
@@ -85,6 +90,18 @@ export class Planet {
             this.glowSprite = new THREE.Sprite(spriteMaterial);
             this.glowSprite.scale.set(this.data.rayon * 4, this.data.rayon * 4, 1);
             this.group.add(this.glowSprite);
+
+            // Couronne externe : halo plus large et plus diffus
+            const coronaMaterial = new THREE.SpriteMaterial({
+                map: glowTexture,
+                color: 0xff5511,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                opacity: 0.30
+            });
+            this.coronaSprite = new THREE.Sprite(coronaMaterial);
+            this.coronaSprite.scale.set(this.data.rayon * 7.5, this.data.rayon * 7.5, 1);
+            this.group.add(this.coronaSprite);
         }
 
         // B. Terre (Nuages + Atmosphère)
@@ -99,12 +116,12 @@ export class Planet {
                 blending: THREE.NormalBlending
             });
             this.cloudsMesh = new THREE.Mesh(cloudsGeometry, cloudsMaterial);
-            this.group.add(this.cloudsMesh);
+            this.tiltGroup.add(this.cloudsMesh);
         }
 
         // C. Atmosphère (Terre & Vénus)
         if (this.key === 'terre' || this.key === 'venus') {
-            const atmosphereGeometry = new THREE.SphereGeometry(this.data.rayon + 0.08, 64, 64);
+            const atmosphereGeometry = new THREE.SphereGeometry(this.data.rayon + 0.14, 64, 64);
             
             // Shader d'atmosphère (Glow externe)
             const color = this.key === 'terre' ? new THREE.Color(0x3a9eff) : new THREE.Color(0xffcc88);
@@ -120,7 +137,7 @@ export class Planet {
                     varying vec3 vNormal;
                     uniform vec3 color;
                     void main() {
-                        float intensity = pow(0.7 - dot(vNormal, vec3(0, 0, 1.0)), 2.0);
+                        float intensity = pow(0.78 - dot(vNormal, vec3(0, 0, 1.0)), 2.2) * 1.5;
                         gl_FragColor = vec4(color, 1.0) * intensity;
                     }
                 `,
@@ -140,8 +157,20 @@ export class Planet {
         if (this.key === 'saturne') {
             const innerRadius = this.data.rayon + 0.5;
             const outerRadius = this.data.rayon + 3.0;
-            const ringGeometry = new THREE.RingGeometry(innerRadius, outerRadius, 64);
-            
+            const ringGeometry = new THREE.RingGeometry(innerRadius, outerRadius, 128);
+
+            // Remapper les UVs radialement : u = position entre rayon interne et externe,
+            // sinon la texture 1D serait plaquée de gauche à droite sur le plan
+            const ringPos = ringGeometry.attributes.position;
+            const ringUv = ringGeometry.attributes.uv;
+            const v3 = new THREE.Vector3();
+            for (let i = 0; i < ringPos.count; i++) {
+                v3.fromBufferAttribute(ringPos, i);
+                const r = (v3.length() - innerRadius) / (outerRadius - innerRadius);
+                ringUv.setXY(i, r, 0.5);
+            }
+
+
             // Texture d'anneau avec Cassini Division procédurale
             const ringCanvas = this.createSaturnRingsTexture();
             const ringTexture = new THREE.CanvasTexture(ringCanvas);
@@ -159,10 +188,11 @@ export class Planet {
             });
 
             this.ringsMesh = new THREE.Mesh(ringGeometry, ringMaterial);
-            this.ringsMesh.rotation.x = Math.PI / 2.2; // Légère inclinaison
+            // Plan équatorial exact : l'inclinaison réelle vient du tiltGroup
+            this.ringsMesh.rotation.x = Math.PI / 2;
             this.ringsMesh.receiveShadow = true;
             this.ringsMesh.castShadow = true;
-            this.group.add(this.ringsMesh);
+            this.tiltGroup.add(this.ringsMesh);
         }
 
         // 4. Positionnement initial
@@ -227,6 +257,11 @@ export class Planet {
             const time = Date.now() * 0.001;
             const scale = this.data.rayon * 4 + Math.sin(time * 2) * 0.2;
             this.glowSprite.scale.set(scale, scale, 1);
+        }
+
+        // Animation de la surface du Soleil
+        if (this.sunMaterial) {
+            this.sunMaterial.uniforms.uTime.value = Date.now() * 0.001;
         }
     }
 
@@ -694,6 +729,13 @@ export class Planet {
 
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, size, 1);
+
+        // Bandes fines aléatoires pour donner du grain aux anneaux
+        for (let i = 0; i < 60; i++) {
+            const x = Math.floor(80 + Math.random() * (size - 100));
+            ctx.fillStyle = `rgba(0, 0, 0, ${0.05 + Math.random() * 0.22})`;
+            ctx.fillRect(x, 0, 1 + Math.floor(Math.random() * 2), 1);
+        }
         return canvas;
     }
 }

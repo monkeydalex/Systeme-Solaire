@@ -13,7 +13,7 @@ export class SpecialEffectsManager {
         this.spaceStation = null;
 
         // Configuration
-        this.starsCount = 2000;
+        this.starsCount = 6000;
         this.asteroidsCount = 400;
         this.nextMeteorTime = 0;
     }
