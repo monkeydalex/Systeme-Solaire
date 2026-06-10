@@ -61,8 +61,12 @@ body {
 #dock {
     position: fixed;
     bottom: 14px;
-    left: 50%;
-    transform: translateX(-50%);
+    /* left:50% + translateX ne laisse que la moitié du viewport avant de
+       wrapper : on centre avec margin auto + fit-content à la place */
+    left: 0;
+    right: 0;
+    margin-inline: auto;
+    width: fit-content;
     display: flex;
     align-items: center;
     gap: 16px;

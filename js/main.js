@@ -273,7 +273,8 @@ class App {
             temperature: facts.temperature,
             color: facts.color,
             description: body.data.description || '',
-            texture: body.mesh.material.map || null // Pour la mini-preview (null = couleur unie)
+            // Pour la mini-preview (null = couleur unie)
+            texture: (body.getPreviewTexture ? body.getPreviewTexture() : body.mesh.material.map) || null
         };
     }
 

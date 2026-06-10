@@ -35,8 +35,10 @@ export class Labels {
 
     setVisible(visible) {
         this.visible = visible;
+        // CSS2DRenderer réécrit style.display à chaque frame :
+        // il faut agir sur la visibilité de l'objet 3D, pas sur le DOM
         for (const obj of this.objects) {
-            obj.element.style.display = visible ? '' : 'none';
+            obj.visible = visible;
         }
     }
 

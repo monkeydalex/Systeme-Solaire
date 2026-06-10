@@ -21,7 +21,7 @@ export class SceneManager {
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.15;
+        this.renderer.toneMappingExposure = 1.3;
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFShadowMap;
         
@@ -39,7 +39,7 @@ export class SceneManager {
         this.controls.maxDistance = 600;
 
         // Lumière ambiante douce pour déboucher les faces non éclairées des planètes
-        const ambientLight = new THREE.AmbientLight(0x404060, 0.35);
+        const ambientLight = new THREE.AmbientLight(0x606880, 0.55);
         this.scene.add(ambientLight);
 
         window.addEventListener('resize', this.onWindowResize.bind(this));

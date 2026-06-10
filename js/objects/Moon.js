@@ -40,9 +40,9 @@ export class Moon {
         }
         const orbitGeometry = new THREE.BufferGeometry().setFromPoints(points);
         const orbitMaterial = new THREE.LineBasicMaterial({
-            color: 0x556688,
+            color: 0x7788bb,
             transparent: true,
-            opacity: 0.2
+            opacity: 0.35
         });
         this.orbitMesh = new THREE.Line(orbitGeometry, orbitMaterial);
         this.planet.group.add(this.orbitMesh);

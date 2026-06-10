@@ -70,7 +70,7 @@ export class Planet {
         if (this.key === 'soleil') {
             // PointLight centrale puissante (decay 0 : pas d'atténuation,
             // les distances de la scène sont pédagogiques, pas physiques)
-            this.light = new THREE.PointLight(0xffffff, 2.2, 0, 0);
+            this.light = new THREE.PointLight(0xffffff, 2.4, 0, 0);
             this.light.castShadow = true;
             this.light.shadow.mapSize.width = 2048;
             this.light.shadow.mapSize.height = 2048;
@@ -214,9 +214,9 @@ export class Planet {
         }
         const orbitGeometry = new THREE.BufferGeometry().setFromPoints(points);
         const orbitMaterial = new THREE.LineBasicMaterial({
-            color: 0x444466,
+            color: 0x7788bb,
             transparent: true,
-            opacity: 0.25,
+            opacity: 0.5,
             linewidth: 1
         });
         this.orbitMesh = new THREE.Line(orbitGeometry, orbitMaterial);
@@ -281,6 +281,16 @@ export class Planet {
             this.orbitMesh.geometry.dispose();
             this.orbitMesh.material.dispose();
         }
+    }
+
+    // Texture pour l'aperçu de la fiche : les corps dont la vraie texture est
+    // inutilisable en gros plan (Soleil devenu shader, dégradés trop lisses
+    // d'Uranus/Neptune) utilisent la version procédurale détaillée
+    getPreviewTexture() {
+        if (this.key === 'soleil' || this.key === 'uranus' || this.key === 'neptune') {
+            return this.getOrCreateProceduralTexture();
+        }
+        return this.mesh.material.map;
     }
 
     // Charge la vraie texture JPG ; retombe sur la texture procédurale en cas d'échec
@@ -363,10 +373,14 @@ export class Planet {
                 ], false);
                 break;
             case 'uranus':
-                this.drawIceGiantTexture(ctx, size, baseColorHex, 0.1);
+                this.drawIceGiantTexture(ctx, size, [
+                    '#8fd8e8', '#a5e2ec', '#7cc8de', '#96dce6', '#6db8d6'
+                ], 0.5);
                 break;
             case 'neptune':
-                this.drawIceGiantTexture(ctx, size, baseColorHex, 0.2, true); // true = ajouter la grande tache sombre
+                this.drawIceGiantTexture(ctx, size, [
+                    '#2c50c8', '#3f6ad8', '#2a48b0', '#4a78e0', '#1f3a9a'
+                ], 1.0, true); // true = ajouter la grande tache sombre
                 break;
         }
 
@@ -625,24 +639,41 @@ export class Planet {
         }
     }
 
-    drawIceGiantTexture(ctx, size, baseColorHex, detailStrength, addDarkSpot = false) {
+    drawIceGiantTexture(ctx, size, bandColors, detailStrength, addDarkSpot = false) {
+        // 1. Bandes latitudinales (dégradé vertical)
+        const grad = ctx.createLinearGradient(0, 0, 0, size);
+        bandColors.forEach((color, i) => grad.addColorStop(i / (bandColors.length - 1), color));
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, size, size);
+
+        // 2. Vents zonaux : stries horizontales bruitées
         const imgData = ctx.getImageData(0, 0, size, size);
         const data = imgData.data;
-        const r = parseInt(baseColorHex.slice(1, 3), 16);
-        const g = parseInt(baseColorHex.slice(3, 5), 16);
-        const b = parseInt(baseColorHex.slice(5, 7), 16);
-
         for (let y = 0; y < size; y++) {
+            const bandNoise = noise2D(0.5, y / 16);
             for (let x = 0; x < size; x++) {
                 const idx = (y * size + x) * 4;
-                const n = noise2D(x / 80, y / 80) * detailStrength * 40;
-
-                data[idx] = Math.max(0, Math.min(255, r + n * 0.4));
-                data[idx+1] = Math.max(0, Math.min(255, g + n * 0.8));
-                data[idx+2] = Math.max(0, Math.min(255, b + n));
+                const n = (noise2D(x / 180, y / 24) * 0.7 + bandNoise * 0.5) * detailStrength * 26;
+                data[idx] = Math.max(0, Math.min(255, data[idx] + n * 0.5));
+                data[idx + 1] = Math.max(0, Math.min(255, data[idx + 1] + n * 0.8));
+                data[idx + 2] = Math.max(0, Math.min(255, data[idx + 2] + n));
             }
         }
         ctx.putImageData(imgData, 0, 0);
+
+        // 3. Nuages clairs étirés par les vents
+        for (let i = 0; i < 14; i++) {
+            const x = Math.random() * size;
+            const y = size * (0.12 + Math.random() * 0.76);
+            const w = size * (0.05 + Math.random() * 0.14);
+            const cloudGrad = ctx.createRadialGradient(x, y, 0, x, y, w);
+            cloudGrad.addColorStop(0, `rgba(255, 255, 255, ${0.08 + detailStrength * 0.12})`);
+            cloudGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = cloudGrad;
+            ctx.beginPath();
+            ctx.ellipse(x, y, w, w * 0.22, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         if (addDarkSpot) {
             // Grande tache sombre de Neptune
