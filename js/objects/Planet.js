@@ -85,7 +85,9 @@ export class Planet {
                 color: 0xffaa44,
                 transparent: true,
                 blending: THREE.AdditiveBlending,
-                opacity: 0.8
+                opacity: 0.8,
+                // Sans ça, le quad du sprite masque les orbites derrière lui
+                depthWrite: false
             });
             this.glowSprite = new THREE.Sprite(spriteMaterial);
             this.glowSprite.scale.set(this.data.rayon * 4, this.data.rayon * 4, 1);
@@ -97,7 +99,8 @@ export class Planet {
                 color: 0xff5511,
                 transparent: true,
                 blending: THREE.AdditiveBlending,
-                opacity: 0.30
+                opacity: 0.30,
+                depthWrite: false
             });
             this.coronaSprite = new THREE.Sprite(coronaMaterial);
             this.coronaSprite.scale.set(this.data.rayon * 7.5, this.data.rayon * 7.5, 1);

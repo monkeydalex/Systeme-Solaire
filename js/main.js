@@ -102,6 +102,14 @@ class App {
             onLabelsToggle: (checked) => {
                 if (this.labels) this.labels.setVisible(checked);
             },
+            onOrbitOpacity: (val) => {
+                for (const planet of Object.values(this.planets)) {
+                    if (planet.orbitMesh) planet.orbitMesh.material.opacity = val;
+                }
+                for (const moon of Object.values(this.moons)) {
+                    if (moon.orbitMesh) moon.orbitMesh.material.opacity = val * 0.7;
+                }
+            },
             onEffectToggle: (effect, active) => {
                 if (effect === 'stars') this.effectsManager.toggleStars(active);
                 else if (effect === 'nebula') this.effectsManager.toggleNebula(active);

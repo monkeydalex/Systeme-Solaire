@@ -86,7 +86,9 @@ export class UIManager {
         });
 
         document.getElementById('speed-slider').addEventListener('input', (e) => {
-            this.callbacks.onSpeedChange(parseFloat(e.target.value) / 50); // 0 à 2x
+            const speed = parseFloat(e.target.value) / 50; // 0 à 2x
+            document.getElementById('speed-value').textContent = `×${speed.toFixed(1)}`;
+            this.callbacks.onSpeedChange(speed);
         });
 
         const tourBtn = document.getElementById('tour-btn');
@@ -103,10 +105,31 @@ export class UIManager {
             effectsBtn.classList.toggle('active', open);
         });
 
+        // Fermer le popover au clic en dehors
+        document.addEventListener('click', (e) => {
+            if (!popover.classList.contains('open')) return;
+            if (popover.contains(e.target) || effectsBtn.contains(e.target)) return;
+            popover.classList.remove('open');
+            effectsBtn.classList.remove('active');
+        });
+
         document.getElementById('reset-camera-btn').addEventListener('click', () => {
             this.closeDetailPanel();
             this.selectDockPlanet(null);
             if (this.callbacks.onCameraReset) this.callbacks.onCameraReset();
+        });
+
+        // Raccourcis clavier : Espace = pause, Échap = fermer fiche/popover
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+            if (e.code === 'Space') {
+                e.preventDefault();
+                document.getElementById('pause-btn').click();
+            } else if (e.code === 'Escape') {
+                popover.classList.remove('open');
+                effectsBtn.classList.remove('active');
+                this.closeDetailPanel();
+            }
         });
     }
 
@@ -134,6 +157,12 @@ export class UIManager {
 
         document.getElementById('show-labels').addEventListener('change', (e) => {
             if (this.callbacks.onLabelsToggle) this.callbacks.onLabelsToggle(e.target.checked);
+        });
+
+        document.getElementById('orbit-opacity').addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            document.getElementById('orbit-opacity-value').textContent = val;
+            if (this.callbacks.onOrbitOpacity) this.callbacks.onOrbitOpacity(val / 100);
         });
 
         document.getElementById('reset-btn').addEventListener('click', () => {

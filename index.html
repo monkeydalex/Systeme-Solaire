@@ -54,6 +54,9 @@
         <h3>Affichage</h3>
         <label class="popover-check"><input type="checkbox" id="show-orbits" checked> Orbites</label>
         <label class="popover-check"><input type="checkbox" id="show-labels" checked> Noms des planètes</label>
+        <label class="popover-label">Opacité des orbites <span id="orbit-opacity-value">50</span> %
+            <input type="range" id="orbit-opacity" min="0" max="100" value="50">
+        </label>
         <h3>StarShip</h3>
         <button id="toggle-starship" class="popover-btn">Activer StarShip</button>
         <div id="starship-controls" style="display: none;">
@@ -84,8 +87,9 @@
         <div id="dock-planets"></div>
         <div class="dock-sep"></div>
         <div class="dock-controls">
-            <button id="pause-btn" class="dock-btn" title="Pause / Lecture">❚❚</button>
+            <button id="pause-btn" class="dock-btn" title="Pause / Lecture (Espace)">❚❚</button>
             <input type="range" id="speed-slider" min="0" max="100" value="50" title="Vitesse de simulation">
+            <span id="speed-value" title="Vitesse de simulation">×1.0</span>
             <button id="tour-btn">🚀 Visite guidée</button>
             <button id="effects-btn" class="dock-btn" title="Effets &amp; extras">✦</button>
             <button id="reset-camera-btn" class="dock-btn" title="Vue d'ensemble">⌖</button>

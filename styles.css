@@ -166,6 +166,13 @@ body {
     cursor: pointer;
 }
 
+#speed-value {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--accent);
+    min-width: 34px;
+}
+
 #tour-btn {
     font-family: var(--font-main);
     font-size: 0.78rem;
