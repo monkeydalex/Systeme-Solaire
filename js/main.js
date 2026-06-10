@@ -1,11 +1,13 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import gsap from 'gsap';
 import { SceneManager } from './core/SceneManager.js';
 import { Planet } from './objects/Planet.js';
+import { Moon } from './objects/Moon.js';
 import { Starship } from './objects/Starship.js';
 import { SpecialEffectsManager } from './effects/SpecialEffects.js';
 import { PostProcessing } from './effects/PostProcessing.js';
 import { UIManager } from './ui/UIManager.js';
+import { Labels } from './ui/Labels.js';
 import { planetData } from './data/planetData.js';
 
 class App {
@@ -14,11 +16,13 @@ class App {
         this.effectsManager = null;
         this.postProcessing = null;
         this.uiManager = null;
-        
+
         this.planets = {};
+        this.moons = {};
+        this.labels = null;
         this.starship = null;
-        
-        // Ã‰tats globaux
+
+        // États globaux
         this.simulationSpeed = 1.0;
         this.isPaused = false;
         this.showOrbits = true;
@@ -29,7 +33,7 @@ class App {
     }
 
     init() {
-        // 1. Initialiser le gestionnaire de scÃ¨ne
+        // 1. Initialiser le gestionnaire de scène
         const container = document.getElementById('scene-container');
         this.sceneManager = new SceneManager();
         this.sceneManager.init(container);
@@ -41,20 +45,31 @@ class App {
         // 2. Initialiser le post-processing (Bloom)
         this.postProcessing = new PostProcessing(renderer, scene, camera);
 
-        // 3. CrÃ©er les planÃ¨tes
+        // 3. Créer les planètes puis leurs lunes
         for (const [key, data] of Object.entries(planetData)) {
             this.planets[key] = new Planet(key, data, scene);
         }
+        for (const [key, data] of Object.entries(planetData)) {
+            if (!data.moons) continue;
+            for (const moonData of data.moons) {
+                this.moons[moonData.key] = new Moon(moonData.key, moonData, this.planets[key]);
+            }
+        }
 
-        // 4. Initialiser le Starship (orbite la Terre par dÃ©faut)
+        // 3b. Labels flottants cliquables au-dessus des planètes
+        this.labels = new Labels(container, this.planets, (planetKey) => {
+            this.focusBody(planetKey);
+        });
+
+        // 4. Initialiser le Starship (orbite la Terre par défaut)
         this.starship = new Starship(scene, 'terre', this.planets);
-        // Cacher la fusÃ©e initialement (elle sera activÃ©e via l'UI)
+        // Cacher la fusée initialement (elle sera activée via l'UI)
         this.starship.group.visible = false;
         this.starship.particlesGroup.visible = false;
 
-        // 5. Initialiser les effets spÃ©ciaux
+        // 5. Initialiser les effets spéciaux
         this.effectsManager = new SpecialEffectsManager(scene);
-        // Activer les Ã©toiles par dÃ©faut pour l'immersion
+        // Activer les étoiles par défaut pour l'immersion
         this.effectsManager.toggleStars(true);
         const starBtn = document.querySelector('.effect-btn[data-effect="stars"]');
         if (starBtn) starBtn.classList.add('active');
@@ -74,13 +89,16 @@ class App {
             onCameraReset: () => {
                 this.focusedPlanetKey = null;
                 this.cameraFollowingStarship = false;
-                
-                // RÃ©initialiser la camÃ©ra gÃ©nÃ©rale avec transition fluide
+
+                // Réinitialiser la caméra générale avec transition fluide
                 gsap.to(camera.position, { x: 0, y: 60, z: 130, duration: 1.2, ease: "power2.out" });
                 gsap.to(this.sceneManager.controls.target, { x: 0, y: 0, z: 0, duration: 1.2, ease: "power2.out" });
             },
             onOrbitToggle: (checked) => {
                 this.showOrbits = checked;
+            },
+            onLabelsToggle: (checked) => {
+                if (this.labels) this.labels.setVisible(checked);
             },
             onEffectToggle: (effect, active) => {
                 if (effect === 'stars') this.effectsManager.toggleStars(active);
@@ -91,15 +109,7 @@ class App {
                 else if (effect === 'station') this.effectsManager.toggleSpaceStation(active);
             },
             onPlanetFocus: (planetKey) => {
-                this.focusedPlanetKey = planetKey;
-                this.cameraFollowingStarship = false;
-                
-                // DÃ©cocher le suivi de la camÃ©ra du Starship si nÃ©cessaire
-                const followBtn = document.getElementById('follow-starship');
-                if (followBtn) {
-                    followBtn.classList.remove('active');
-                    followBtn.innerHTML = '<i class="fas fa-eye"></i> Suivre StarShip';
-                }
+                this.focusBody(planetKey, false);
             },
             onStarshipToggle: (active) => {
                 this.starship.group.visible = active;
@@ -117,18 +127,18 @@ class App {
             onStarshipFollow: (active) => {
                 this.cameraFollowingStarship = active;
                 if (active) {
-                    this.focusedPlanetKey = null; // DÃ©sactiver le focus planÃ¨te
+                    this.focusedPlanetKey = null; // Désactiver le focus planète
                 }
             },
-            getPlanetData: (planetKey) => {
-                return this.getFormattedPlanetFacts(planetKey);
+            getPlanetData: (key) => {
+                return this.getFormattedPlanetFacts(key);
             }
         });
 
-        // 7. Raycasting pour clics sur la scÃ¨ne
+        // 7. Raycasting pour clics sur la scène
         this.setupRaycasting();
 
-        // Redimensionner le post-processing avec la fenÃªtre
+        // Redimensionner le post-processing avec la fenêtre
         window.addEventListener('resize', () => {
             this.postProcessing.resize(window.innerWidth, window.innerHeight);
         });
@@ -137,8 +147,25 @@ class App {
         const loader = document.getElementById('loading-message');
         if (loader) loader.style.display = 'none';
 
-        // 8. DÃ©marrer la boucle de rendu
+        // 8. Démarrer la boucle de rendu
         this.animate();
+    }
+
+    // Focalise la caméra sur une planète ou une lune, et ouvre sa fiche
+    focusBody(key, openPanel = true) {
+        this.focusedPlanetKey = key;
+        this.cameraFollowingStarship = false;
+
+        // Décocher le suivi de la caméra du Starship si nécessaire
+        const followBtn = document.getElementById('follow-starship');
+        if (followBtn) {
+            followBtn.classList.remove('active');
+            followBtn.innerHTML = '<i class="fas fa-eye"></i> Suivre StarShip';
+        }
+
+        if (openPanel && this.uiManager) {
+            this.uiManager.showDetailPanel(key);
+        }
     }
 
     setupRaycasting() {
@@ -146,38 +173,32 @@ class App {
         const mouse = new THREE.Vector2();
 
         window.addEventListener('click', (event) => {
-            // EmpÃªcher le clic de se propager si on clique sur l'UI
+            // Empêcher le clic de se propager si on clique sur l'UI
             if (event.target.tagName !== 'CANVAS') return;
-            
-            // Calculer la position normalisÃ©e de la souris
+
+            // Calculer la position normalisée de la souris
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
             raycaster.setFromCamera(mouse, this.sceneManager.camera);
-            
-            // Intersection avec les sphÃ¨res des planÃ¨tes uniquement
-            const planetMeshes = Object.values(this.planets).map(p => p.mesh);
-            const intersects = raycaster.intersectObjects(planetMeshes);
+
+            // Intersection avec les sphères des planètes et des lunes
+            const bodies = { ...this.planets, ...this.moons };
+            const meshes = Object.values(bodies).map(b => b.mesh);
+            const intersects = raycaster.intersectObjects(meshes);
 
             if (intersects.length > 0) {
                 const clickedMesh = intersects[0].object;
-                const clickedKey = Object.keys(this.planets).find(k => this.planets[k].mesh === clickedMesh);
-                
+                const clickedKey = Object.keys(bodies).find(k => bodies[k].mesh === clickedMesh);
+
                 if (clickedKey) {
-                    // SÃ©lectionner la planÃ¨te dans la liste latÃ©rale
+                    // Sélectionner la planète dans la liste latérale si présente
                     const planetListItems = document.querySelectorAll('#planets-section li');
                     planetListItems.forEach(item => {
-                        if (item.getAttribute('data-planet') === clickedKey) {
-                            item.classList.add('selected');
-                        } else {
-                            item.classList.remove('selected');
-                        }
+                        item.classList.toggle('selected', item.getAttribute('data-planet') === clickedKey);
                     });
 
-                    // Focaliser et ouvrir l'UI
-                    this.focusedPlanetKey = clickedKey;
-                    this.cameraFollowingStarship = false;
-                    this.uiManager.showDetailPanel(clickedKey);
+                    this.focusBody(clickedKey);
                 }
             }
         });
@@ -195,13 +216,13 @@ class App {
         const pauseBtn = document.getElementById('pause-btn');
         if (pauseBtn) pauseBtn.innerHTML = '<i class="fas fa-pause"></i> Pause';
 
-        // RÃ©initialiser les angles des planÃ¨tes
+        // Réinitialiser les angles des planètes
         for (const planet of Object.values(this.planets)) {
             planet.angle = Math.random() * Math.PI * 2;
             planet.updatePosition();
         }
 
-        // RÃ©initialiser le Starship vers la Terre
+        // Réinitialiser le Starship vers la Terre
         this.starship.destroy();
         this.starship = new Starship(this.sceneManager.scene, 'terre', this.planets);
         const toggleBtn = document.getElementById('toggle-starship');
@@ -212,69 +233,99 @@ class App {
         const controlsDiv = document.getElementById('starship-controls');
         if (controlsDiv) controlsDiv.style.display = 'none';
 
-        // RÃ©initialiser la camÃ©ra
+        // Réinitialiser la caméra
         gsap.to(this.sceneManager.camera.position, { x: 0, y: 60, z: 130, duration: 1.0 });
         gsap.to(this.sceneManager.controls.target, { x: 0, y: 0, z: 0, duration: 1.0 });
     }
 
-    getFormattedPlanetFacts(planetKey) {
-        const p = this.planets[planetKey];
-        if (!p) return null;
+    getFormattedPlanetFacts(key) {
+        // Les informations astronomiques réelles vivent dans planetData.js
+        const body = this.planets[key] || this.moons[key];
+        if (!body) return null;
 
-        // Les informations astronomiques reelles vivent dans planetData.js
-        const facts = p.data.facts;
+        const facts = body.data.facts;
         return {
-            nom: p.data.nom,
+            nom: body.data.nom,
             type: facts.type,
             diametre: facts.diametre,
             distance: facts.distance,
             periode: facts.periode,
             temperature: facts.temperature,
             color: facts.color,
-            texture: p.mesh.material.map // On transmet la texture 3D pour la mini-preview
+            texture: body.mesh.material.map || null // Pour la mini-preview (null = couleur unie)
         };
     }
+
+    // Position monde + distance de cadrage d'un corps (planète ou lune)
+    getFocusTarget(key) {
+        const planet = this.planets[key];
+        if (planet) {
+            const dist = key === 'soleil' ? 22 : planet.data.rayon * 4.5 + 4;
+            return { pos: planet.group.position.clone(), dist };
+        }
+        const moon = this.moons[key];
+        if (moon) {
+            const pos = new THREE.Vector3();
+            moon.mesh.getWorldPosition(pos);
+            return { pos, dist: moon.data.rayon * 8 + 2 };
+        }
+        return null;
+    }
+
     animate() {
         requestAnimationFrame(this.animate.bind(this));
 
         const speed = this.isPaused ? 0 : this.simulationSpeed;
 
-        // 1. Mettre Ã  jour les planÃ¨tes
+        // 1. Mettre à jour les planètes puis les lunes
         for (const planet of Object.values(this.planets)) {
             planet.update(speed, this.showOrbits);
         }
+        for (const moon of Object.values(this.moons)) {
+            moon.update(speed, this.showOrbits);
+        }
 
-        // 2. Mettre Ã  jour le Starship
+        // 2. Mettre à jour le Starship
         if (this.starship && this.starship.group.visible) {
             this.starship.update(speed);
         }
 
-        // 3. Mettre Ã  jour les effets spÃ©ciaux
+        // 3. Mettre à jour les effets spéciaux
         if (this.effectsManager) {
             this.effectsManager.update(speed, this.planets);
         }
 
-        // 4. Suivi de camÃ©ra intelligent (Pursuit / Focus camera)
+        // 4. Suivi de caméra intelligent (Pursuit / Focus camera)
         const camera = this.sceneManager.camera;
         const controls = this.sceneManager.controls;
 
         if (this.focusedPlanetKey) {
-            const planet = this.planets[this.focusedPlanetKey];
-            if (planet) {
-                const planetPos = planet.group.position;
-                // Calculer la distance de focus selon le rayon de la planÃ¨te
-                const dist = this.focusedPlanetKey === 'soleil' ? 22 : planet.data.rayon * 4.5 + 4;
-                const offset = new THREE.Vector3(dist, dist * 0.4, dist);
-                const targetCamPos = planetPos.clone().add(offset);
+            const target = this.getFocusTarget(this.focusedPlanetKey);
+            if (target) {
+                const { pos, dist } = target;
+                let targetCamPos;
 
-                // Lerp trÃ¨s fluide
+                if (this.focusedPlanetKey === 'soleil') {
+                    targetCamPos = pos.clone().add(new THREE.Vector3(dist, dist * 0.4, dist));
+                } else {
+                    // Se placer du côté éclairé : entre le Soleil (origine) et le corps,
+                    // décalé latéralement pour un éclairage en trois-quarts
+                    const dirToSun = pos.clone().negate().normalize();
+                    const side = new THREE.Vector3().crossVectors(dirToSun, new THREE.Vector3(0, 1, 0)).normalize();
+                    targetCamPos = pos.clone()
+                        .addScaledVector(dirToSun, dist * 0.8)
+                        .addScaledVector(side, dist * 0.5)
+                        .add(new THREE.Vector3(0, dist * 0.35, 0));
+                }
+
+                // Lerp très fluide
                 camera.position.lerp(targetCamPos, 0.05);
-                controls.target.lerp(planetPos, 0.05);
+                controls.target.lerp(pos, 0.05);
             }
-        } 
+        }
         else if (this.cameraFollowingStarship && this.starship && this.starship.group.visible) {
             const shipPos = this.starship.group.position;
-            // Positionner la camÃ©ra lÃ©gÃ¨rement derriÃ¨re la fusÃ©e
+            // Positionner la caméra légèrement derrière la fusée
             const backDir = new THREE.Vector3(0, 0.6, -2.5).applyQuaternion(this.starship.group.quaternion);
             const targetCamPos = shipPos.clone().add(backDir);
 
@@ -282,11 +333,14 @@ class App {
             controls.target.lerp(shipPos, 0.08);
         }
 
-        // 5. Mettre Ã  jour la physique des contrÃ´les
+        // 5. Mettre à jour la physique des contrôles
         this.sceneManager.update();
 
-        // 6. Rendu final avec Post-processing (Bloom)
+        // 6. Rendu final avec Post-processing (Bloom) puis labels 2D
         this.postProcessing.render();
+        if (this.labels) {
+            this.labels.render(this.sceneManager.scene, camera);
+        }
     }
 }
 
