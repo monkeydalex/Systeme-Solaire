@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { SceneManager } from './core/SceneManager.js';
+import { GuidedTour } from './core/GuidedTour.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
 import { Starship } from './objects/Starship.js';
@@ -21,6 +22,7 @@ class App {
         this.moons = {};
         this.labels = null;
         this.starship = null;
+        this.tour = null;
 
         // États globaux
         this.simulationSpeed = 1.0;
@@ -130,10 +132,23 @@ class App {
                     this.focusedPlanetKey = null; // Désactiver le focus planète
                 }
             },
+            onTourToggle: (active) => {
+                if (active) this.tour.start();
+                else this.tour.stop();
+            },
             getPlanetData: (key) => {
                 return this.getFormattedPlanetFacts(key);
             }
         });
+
+        // 6b. Visite guidée cinématique de Mercure à Neptune
+        this.tour = new GuidedTour(
+            ['mercure', 'venus', 'terre', 'mars', 'jupiter', 'saturne', 'uranus', 'neptune'],
+            {
+                onVisit: (key) => this.focusBody(key, true, true),
+                onEnd: () => this.uiManager.setTourActive(false)
+            }
+        );
 
         // 7. Raycasting pour clics sur la scène
         this.setupRaycasting();
@@ -152,7 +167,12 @@ class App {
     }
 
     // Focalise la caméra sur une planète ou une lune, et ouvre sa fiche
-    focusBody(key, openPanel = true) {
+    focusBody(key, openPanel = true, fromTour = false) {
+        // Toute interaction manuelle interrompt la visite guidée
+        if (!fromTour && this.tour && this.tour.active) {
+            this.tour.stop();
+        }
+
         this.focusedPlanetKey = key;
         this.cameraFollowingStarship = false;
 
@@ -160,7 +180,7 @@ class App {
         const followBtn = document.getElementById('follow-starship');
         if (followBtn) {
             followBtn.classList.remove('active');
-            followBtn.innerHTML = '<i class="fas fa-eye"></i> Suivre StarShip';
+            followBtn.textContent = 'Suivre StarShip';
         }
 
         if (openPanel && this.uiManager) {
@@ -191,13 +211,8 @@ class App {
                 const clickedMesh = intersects[0].object;
                 const clickedKey = Object.keys(bodies).find(k => bodies[k].mesh === clickedMesh);
 
+                // showDetailPanel surligne la vignette correspondante du dock
                 if (clickedKey) {
-                    // Sélectionner la planète dans la liste latérale si présente
-                    const planetListItems = document.querySelectorAll('#planets-section li');
-                    planetListItems.forEach(item => {
-                        item.classList.toggle('selected', item.getAttribute('data-planet') === clickedKey);
-                    });
-
                     this.focusBody(clickedKey);
                 }
             }
@@ -205,6 +220,8 @@ class App {
     }
 
     resetSimulation() {
+        if (this.tour && this.tour.active) this.tour.stop();
+
         this.simulationSpeed = 1.0;
         this.isPaused = false;
         this.focusedPlanetKey = null;
@@ -214,7 +231,10 @@ class App {
         if (speedSlider) speedSlider.value = 50;
 
         const pauseBtn = document.getElementById('pause-btn');
-        if (pauseBtn) pauseBtn.innerHTML = '<i class="fas fa-pause"></i> Pause';
+        if (pauseBtn) {
+            pauseBtn.textContent = '❚❚';
+            pauseBtn.classList.remove('active');
+        }
 
         // Réinitialiser les angles des planètes
         for (const planet of Object.values(this.planets)) {
@@ -228,7 +248,7 @@ class App {
         const toggleBtn = document.getElementById('toggle-starship');
         if (toggleBtn) {
             toggleBtn.classList.remove('active');
-            toggleBtn.innerHTML = '<i class="fas fa-power-off"></i> Activer StarShip';
+            toggleBtn.textContent = 'Activer StarShip';
         }
         const controlsDiv = document.getElementById('starship-controls');
         if (controlsDiv) controlsDiv.style.display = 'none';
@@ -252,6 +272,7 @@ class App {
             periode: facts.periode,
             temperature: facts.temperature,
             color: facts.color,
+            description: body.data.description || '',
             texture: body.mesh.material.map || null // Pour la mini-preview (null = couleur unie)
         };
     }

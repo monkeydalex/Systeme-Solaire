@@ -1,321 +1,282 @@
 import * as THREE from 'three';
-import gsap from 'gsap';
+import { planetData } from '../data/planetData.js';
 
+// Interface « Dock cinéma » : dock bas (vignettes + contrôles),
+// fiche latérale droite, popover effets & extras.
 export class UIManager {
     constructor(callbacks) {
-        this.callbacks = callbacks; // Callbacks vers le moteur principal ({ onSpeedChange, onPlayPause, onReset, onOrbitToggle, onEffectToggle, onPlanetFocus, onStarshipToggle, onStarshipTarget, onStarshipSpeed, onStarshipFollow })
-        
+        this.callbacks = callbacks;
+
         // États locaux
-        this.detailPanelActive = false;
         this.detailAutoRotate = true;
-        
-        // Mini scene pour le panneau détail
+        this.currentBodyKey = null;
+
+        // Mini scène pour l'aperçu de la fiche
         this.previewScene = null;
         this.previewCamera = null;
         this.previewRenderer = null;
         this.previewMesh = null;
         this.previewAnimationId = null;
 
+        // Index { clé -> { data, parentKey } } pour planètes ET lunes
+        this.bodyIndex = {};
+        for (const [key, data] of Object.entries(planetData)) {
+            this.bodyIndex[key] = { data, parentKey: null };
+            if (data.moons) {
+                for (const moon of data.moons) {
+                    this.bodyIndex[moon.key] = { data: moon, parentKey: key };
+                }
+            }
+        }
+
         this.init();
     }
 
     init() {
-        this.setupTabs();
-        this.setupPanelCollapse();
-        this.setupSimulationControls();
-        this.setupPlanetList();
-        this.setupEffectsControls();
+        this.buildDock();
+        this.setupDockControls();
+        this.setupEffectsPopover();
         this.setupStarshipUI();
-        this.setupDetailPanelClose();
+        this.setupDetailPanel();
     }
 
-    // --- Onglets ---
-    setupTabs() {
-        const tabs = document.querySelectorAll('.tab');
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                tabs.forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
+    // --- Dock : vignettes des corps ---
+    buildDock() {
+        const wrap = document.getElementById('dock-planets');
+        for (const [key, data] of Object.entries(planetData)) {
+            const btn = document.createElement('button');
+            btn.className = 'dock-planet';
+            btn.dataset.planet = key;
+            btn.title = data.nom;
 
-                document.querySelectorAll('.tab-content').forEach(content => {
-                    content.style.display = 'none';
-                });
-                
-                const contentId = tab.getAttribute('data-tab') + '-content';
-                const selectedContent = document.getElementById(contentId);
-                if (selectedContent) {
-                    selectedContent.style.display = 'block';
-                }
+            const ball = document.createElement('span');
+            ball.className = 'dock-ball';
+            ball.style.background =
+                `radial-gradient(circle at 35% 35%, rgba(255,255,255,0.55), ${data.facts.color} 55%, rgba(0,0,0,0.55))`;
+
+            const name = document.createElement('span');
+            name.className = 'dock-name';
+            name.textContent = data.nom;
+
+            btn.append(ball, name);
+            btn.addEventListener('click', () => {
+                if (this.callbacks.onPlanetFocus) this.callbacks.onPlanetFocus(key);
+                this.showDetailPanel(key);
             });
+            wrap.appendChild(btn);
+        }
+    }
+
+    // Surligne la vignette du corps affiché (sa planète parente pour une lune)
+    selectDockPlanet(key) {
+        const entry = this.bodyIndex[key];
+        const planetKey = entry && entry.parentKey ? entry.parentKey : key;
+        document.querySelectorAll('.dock-planet').forEach(btn => {
+            btn.classList.toggle('selected', btn.dataset.planet === planetKey);
         });
     }
 
-    // --- Menu Collapsable ---
-    setupPanelCollapse() {
-        const controlPanel = document.getElementById('control-panel');
-        const panelToggle = document.getElementById('panel-toggle');
-        
-        if (panelToggle && controlPanel) {
-            panelToggle.addEventListener('click', () => {
-                controlPanel.classList.toggle('collapsed');
-                
-                if (controlPanel.classList.contains('collapsed')) {
-                    panelToggle.innerHTML = '<i class="fas fa-cogs fa-2x"></i><span class="toggle-hint">MENU</span>';
-                    panelToggle.setAttribute('title', 'Ouvrir le panneau de contrôle');
-                } else {
-                    panelToggle.innerHTML = '<i class="fas fa-times fa-2x"></i><span class="toggle-hint">FERMER</span>';
-                    panelToggle.setAttribute('title', 'Fermer le panneau de contrôle');
-                }
-            });
-        }
-    }
-
-    // --- Contrôles généraux ---
-    setupSimulationControls() {
-        // Vitesse
-        const speedSlider = document.getElementById('speed-slider');
-        if (speedSlider) {
-            speedSlider.addEventListener('input', (e) => {
-                const val = parseFloat(e.target.value) / 50; // 0 à 2x
-                if (this.callbacks.onSpeedChange) this.callbacks.onSpeedChange(val);
-            });
-        }
-
-        // Pause / Lecture
+    // --- Contrôles du dock ---
+    setupDockControls() {
         const pauseBtn = document.getElementById('pause-btn');
-        if (pauseBtn) {
-            pauseBtn.addEventListener('click', () => {
-                if (this.callbacks.onPlayPause) {
-                    const isPaused = this.callbacks.onPlayPause();
-                    pauseBtn.innerHTML = isPaused ? 
-                        '<i class="fas fa-play"></i> Reprendre' : 
-                        '<i class="fas fa-pause"></i> Pause';
-                }
-            });
-        }
+        pauseBtn.addEventListener('click', () => {
+            const isPaused = this.callbacks.onPlayPause();
+            pauseBtn.textContent = isPaused ? '▶' : '❚❚';
+            pauseBtn.classList.toggle('active', isPaused);
+        });
 
-        // Réinitialiser
-        const resetBtn = document.getElementById('reset-btn');
-        if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-                if (this.callbacks.onReset) this.callbacks.onReset();
-            });
-        }
+        document.getElementById('speed-slider').addEventListener('input', (e) => {
+            this.callbacks.onSpeedChange(parseFloat(e.target.value) / 50); // 0 à 2x
+        });
 
-        // Caméra reset
-        const resetCameraBtn = document.getElementById('reset-camera-btn');
-        if (resetCameraBtn) {
-            resetCameraBtn.addEventListener('click', () => {
-                if (this.callbacks.onCameraReset) this.callbacks.onCameraReset();
-            });
-        }
+        const tourBtn = document.getElementById('tour-btn');
+        tourBtn.addEventListener('click', () => {
+            const willBeActive = !tourBtn.classList.contains('active');
+            this.setTourActive(willBeActive);
+            if (this.callbacks.onTourToggle) this.callbacks.onTourToggle(willBeActive);
+        });
 
-        // Orbites
-        const orbitsCheckbox = document.getElementById('show-orbits');
-        if (orbitsCheckbox) {
-            orbitsCheckbox.addEventListener('change', (e) => {
-                if (this.callbacks.onOrbitToggle) this.callbacks.onOrbitToggle(e.target.checked);
-            });
-        }
-    }
+        const effectsBtn = document.getElementById('effects-btn');
+        const popover = document.getElementById('effects-popover');
+        effectsBtn.addEventListener('click', () => {
+            const open = popover.classList.toggle('open');
+            effectsBtn.classList.toggle('active', open);
+        });
 
-    // --- Liste des Planètes ---
-    setupPlanetList() {
-        const planetItems = document.querySelectorAll('#planets-section li');
-        planetItems.forEach(item => {
-            item.addEventListener('click', () => {
-                const planetKey = item.getAttribute('data-planet');
-                if (planetKey) {
-                    planetItems.forEach(p => p.classList.remove('selected'));
-                    item.classList.add('selected');
-                    
-                    if (this.callbacks.onPlanetFocus) {
-                        this.callbacks.onPlanetFocus(planetKey);
-                    }
-                    this.showDetailPanel(planetKey);
-                }
-            });
+        document.getElementById('reset-camera-btn').addEventListener('click', () => {
+            this.closeDetailPanel();
+            this.selectDockPlanet(null);
+            if (this.callbacks.onCameraReset) this.callbacks.onCameraReset();
         });
     }
 
-    // --- Effets spéciaux ---
-    setupEffectsControls() {
-        const effectButtons = document.querySelectorAll('.effect-btn');
-        effectButtons.forEach(button => {
+    setTourActive(active) {
+        const tourBtn = document.getElementById('tour-btn');
+        tourBtn.classList.toggle('active', active);
+        tourBtn.textContent = active ? '■ Arrêter la visite' : '🚀 Visite guidée';
+    }
+
+    // --- Popover effets, affichage, simulation ---
+    setupEffectsPopover() {
+        document.querySelectorAll('.effect-btn').forEach(button => {
             button.addEventListener('click', () => {
-                const effect = button.getAttribute('data-effect');
                 button.classList.toggle('active');
-                
-                const active = button.classList.contains('active');
-                if (this.callbacks.onEffectToggle) {
-                    this.callbacks.onEffectToggle(effect, active);
-                }
+                this.callbacks.onEffectToggle(
+                    button.getAttribute('data-effect'),
+                    button.classList.contains('active')
+                );
             });
+        });
+
+        document.getElementById('show-orbits').addEventListener('change', (e) => {
+            this.callbacks.onOrbitToggle(e.target.checked);
+        });
+
+        document.getElementById('show-labels').addEventListener('change', (e) => {
+            if (this.callbacks.onLabelsToggle) this.callbacks.onLabelsToggle(e.target.checked);
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            this.callbacks.onReset();
         });
     }
 
-    // --- Starship UI (Nouveau) ---
+    // --- StarShip ---
     setupStarshipUI() {
-        // Ces éléments seront ajoutés au DOM via index.html, mais nous configurons les écouteurs ici
         const toggleBtn = document.getElementById('toggle-starship');
         const controlsDiv = document.getElementById('starship-controls');
-        const targetSelect = document.getElementById('starship-target');
+
+        toggleBtn.addEventListener('click', () => {
+            toggleBtn.classList.toggle('active');
+            const active = toggleBtn.classList.contains('active');
+            toggleBtn.textContent = active ? 'Désactiver StarShip' : 'Activer StarShip';
+            controlsDiv.style.display = active ? 'block' : 'none';
+            this.callbacks.onStarshipToggle(active);
+        });
+
+        document.getElementById('starship-target').addEventListener('change', (e) => {
+            this.callbacks.onStarshipTarget(e.target.value);
+        });
+
         const speedSlider = document.getElementById('starship-speed');
         const speedVal = document.getElementById('starship-speed-value');
+        speedSlider.addEventListener('input', (e) => {
+            const speed = parseFloat(e.target.value);
+            speedVal.textContent = speed.toFixed(1);
+            this.callbacks.onStarshipSpeed(speed);
+        });
+
         const followBtn = document.getElementById('follow-starship');
+        followBtn.addEventListener('click', () => {
+            followBtn.classList.toggle('active');
+            const active = followBtn.classList.contains('active');
+            followBtn.textContent = active ? 'Ne plus suivre' : 'Suivre StarShip';
+            this.callbacks.onStarshipFollow(active);
+        });
+    }
 
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', () => {
-                toggleBtn.classList.toggle('active');
-                const active = toggleBtn.classList.contains('active');
+    // --- Fiche détaillée ---
+    setupDetailPanel() {
+        document.getElementById('close-panel').addEventListener('click', () => {
+            this.closeDetailPanel();
+        });
 
-                if (active) {
-                    toggleBtn.innerHTML = '<i class="fas fa-power-off"></i> Désactiver StarShip';
-                    if (controlsDiv) controlsDiv.style.display = 'block';
-                } else {
-                    toggleBtn.innerHTML = '<i class="fas fa-power-off"></i> Activer StarShip';
-                    if (controlsDiv) controlsDiv.style.display = 'none';
-                }
+        document.getElementById('detail-auto-rotate').addEventListener('change', (e) => {
+            this.detailAutoRotate = e.target.checked;
+        });
+    }
 
-                if (this.callbacks.onStarshipToggle) {
-                    this.callbacks.onStarshipToggle(active);
-                }
-            });
-        }
-
-        if (targetSelect) {
-            targetSelect.addEventListener('change', (e) => {
-                if (this.callbacks.onStarshipTarget) {
-                    this.callbacks.onStarshipTarget(e.target.value);
-                }
-            });
-        }
-
-        if (speedSlider) {
-            speedSlider.addEventListener('input', (e) => {
-                const speed = parseFloat(e.target.value);
-                if (speedVal) speedVal.textContent = speed.toFixed(1);
-                if (this.callbacks.onStarshipSpeed) {
-                    this.callbacks.onStarshipSpeed(speed);
-                }
-            });
-        }
-
-        if (followBtn) {
-            followBtn.addEventListener('click', () => {
-                followBtn.classList.toggle('active');
-                const active = followBtn.classList.contains('active');
-                if (active) {
-                    followBtn.innerHTML = '<i class="fas fa-eye-slash"></i> Ne plus suivre';
-                } else {
-                    followBtn.innerHTML = '<i class="fas fa-eye"></i> Suivre StarShip';
-                }
-                if (this.callbacks.onStarshipFollow) {
-                    this.callbacks.onStarshipFollow(active);
-                }
-            });
+    closeDetailPanel() {
+        document.getElementById('detail-panel').classList.remove('open');
+        if (this.previewAnimationId) {
+            cancelAnimationFrame(this.previewAnimationId);
+            this.previewAnimationId = null;
         }
     }
 
-    // --- Panneau Détaillé & Mini Rendu ---
-    setupDetailPanelClose() {
-        const closeBtn = document.getElementById('close-panel');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                const detailPanel = document.getElementById('planet-detail-panel');
-                if (detailPanel) {
-                    detailPanel.style.display = 'none';
-                    this.detailPanelActive = false;
-                    
-                    // Stopper la mini boucle d'animation
-                    if (this.previewAnimationId) {
-                        cancelAnimationFrame(this.previewAnimationId);
-                    }
+    showDetailPanel(key) {
+        const info = this.callbacks.getPlanetData(key);
+        if (!info) return;
 
-                    // Réinitialiser la caméra générale
-                    if (this.callbacks.onCameraReset) this.callbacks.onCameraReset();
-                }
-            });
+        this.currentBodyKey = key;
+        this.selectDockPlanet(key);
+
+        document.getElementById('detail-tag').textContent = info.type;
+        document.getElementById('detail-name').textContent = info.nom;
+        document.getElementById('detail-type').textContent = info.type;
+        document.getElementById('detail-diameter').textContent = info.diametre;
+        document.getElementById('detail-distance').textContent = info.distance;
+        document.getElementById('detail-period').textContent = info.periode;
+        document.getElementById('detail-temperature').textContent = info.temperature;
+        document.getElementById('detail-description').textContent = info.description || '';
+
+        // Chips : lunes de la planète, ou planète parente pour une lune
+        const moonsDiv = document.getElementById('detail-moons');
+        moonsDiv.innerHTML = '';
+        const entry = this.bodyIndex[key];
+        const related = [];
+        if (entry) {
+            if (entry.data.moons) {
+                for (const moon of entry.data.moons) related.push({ key: moon.key, nom: '☾ ' + moon.nom });
+            }
+            if (entry.parentKey) {
+                related.push({ key: entry.parentKey, nom: '↩ ' + planetData[entry.parentKey].nom });
+            }
+        }
+        if (related.length > 0) {
+            const title = document.createElement('div');
+            title.className = 'moons-title';
+            title.textContent = entry.parentKey ? 'En orbite autour de' : 'Lunes';
+            moonsDiv.appendChild(title);
+            for (const rel of related) {
+                const chip = document.createElement('button');
+                chip.className = 'moon-chip';
+                chip.textContent = rel.nom;
+                chip.addEventListener('click', () => {
+                    if (this.callbacks.onPlanetFocus) this.callbacks.onPlanetFocus(rel.key);
+                    this.showDetailPanel(rel.key);
+                });
+                moonsDiv.appendChild(chip);
+            }
         }
 
-        const autoRotateChk = document.getElementById('detail-auto-rotate');
-        if (autoRotateChk) {
-            autoRotateChk.addEventListener('change', (e) => {
-                this.detailAutoRotate = e.target.checked;
-            });
-        }
+        document.getElementById('detail-panel').classList.add('open');
 
-        const focusBtn = document.getElementById('detail-focus-planet');
-        if (focusBtn) {
-            focusBtn.addEventListener('click', () => {
-                if (this.callbacks.onPlanetFocus) {
-                    const activePlanet = document.querySelector('#planets-section li.selected');
-                    if (activePlanet) {
-                        this.callbacks.onPlanetFocus(activePlanet.getAttribute('data-planet'));
-                    }
-                }
-            });
-        }
+        this.initPreviewScene(key, info.color, info.texture);
     }
 
-    showDetailPanel(planetKey) {
-        const planetInfo = this.callbacks.getPlanetData(planetKey);
-        if (!planetInfo) return;
-
-        this.detailPanelActive = true;
-        const panel = document.getElementById('planet-detail-panel');
-        if (panel) panel.style.display = 'block';
-
-        // Mettre à jour les textes du DOM
-        document.getElementById('detail-planet-name').textContent = planetInfo.nom;
-        document.getElementById('detail-planet-type').textContent = planetInfo.type;
-        document.getElementById('detail-planet-diameter').textContent = planetInfo.diametre;
-        document.getElementById('detail-planet-distance').textContent = planetInfo.distance;
-        document.getElementById('detail-planet-orbital-period').textContent = planetInfo.periode;
-        document.getElementById('detail-planet-temperature').textContent = planetInfo.temperature;
-
-        // Configurer le mini canvas de prévisualisation
-        this.initPreviewScene(planetKey, planetInfo.color, planetInfo.texture);
-    }
-
-    initPreviewScene(planetKey, colorHex, originalTexture) {
+    // --- Mini scène d'aperçu 3D ---
+    initPreviewScene(bodyKey, colorHex, originalTexture) {
         const container = document.getElementById('planet-preview-container');
         if (!container) return;
 
-        // Arrêter l'ancienne animation
         if (this.previewAnimationId) {
             cancelAnimationFrame(this.previewAnimationId);
         }
 
-        // Créer le renderer une seule fois
         if (!this.previewRenderer) {
             while (container.firstChild) container.removeChild(container.firstChild);
             this.previewRenderer = new THREE.WebGLRenderer({ antialias: true });
-            this.previewRenderer.setClearColor(0x111116, 1);
+            this.previewRenderer.setClearColor(0x070a18, 1);
             container.appendChild(this.previewRenderer.domElement);
         }
-        
-        const width = container.clientWidth || 320;
-        const height = container.clientHeight || 320;
+
+        const width = container.clientWidth || 290;
+        const height = container.clientHeight || 190;
         this.previewRenderer.setSize(width, height);
 
-        // Scène & Caméra
         this.previewScene = new THREE.Scene();
         this.previewCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10);
         this.previewCamera.position.z = 4.2;
 
         // Éclairage studio
-        const ambLight = new THREE.AmbientLight(0xffffff, 0.3);
-        this.previewScene.add(ambLight);
-        
+        this.previewScene.add(new THREE.AmbientLight(0xffffff, 0.3));
         const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
         dirLight.position.set(5, 3, 5);
         this.previewScene.add(dirLight);
 
-        // Mesh de la planète
         const geometry = new THREE.SphereGeometry(1.5, 32, 32);
-        
-        // Matériau avec texture récupérée de l'objet principal si disponible
+
         let material;
         if (originalTexture) {
             material = new THREE.MeshStandardMaterial({
@@ -324,21 +285,20 @@ export class UIManager {
                 metalness: 0.1
             });
         } else {
-            // Créer une texture colorée basique en secours
+            // Texture colorée unie en secours (Soleil shader, échec de chargement…)
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 256;
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = colorHex;
-            ctx.fillRect(0,0,256,256);
-            const fallbackTex = new THREE.CanvasTexture(canvas);
-            material = new THREE.MeshStandardMaterial({ map: fallbackTex, roughness: 0.6 });
+            ctx.fillRect(0, 0, 256, 256);
+            material = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(canvas), roughness: 0.6 });
         }
 
         this.previewMesh = new THREE.Mesh(geometry, material);
         this.previewScene.add(this.previewMesh);
 
-        // Anneaux si c'est Saturne
-        if (planetKey === 'saturne') {
+        // Anneaux pour Saturne
+        if (bodyKey === 'saturne') {
             const ringGeo = new THREE.RingGeometry(1.8, 2.8, 64);
             const ringMat = new THREE.MeshStandardMaterial({
                 color: 0xcca770,
@@ -351,7 +311,6 @@ export class UIManager {
             this.previewScene.add(ring);
         }
 
-        // Lancer la boucle d'animation locale
         const animate = () => {
             if (this.previewMesh && this.detailAutoRotate) {
                 this.previewMesh.rotation.y += 0.008;

@@ -3,172 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
-    <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
     <title>Système Solaire 3D</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪐</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="scene-container"></div>
 
-    <!-- Panneau de contrôle principal -->
-    <div id="control-panel" class="collapsed">
-        <button id="panel-toggle" title="Ouvrir le panneau de contrôle">
-            <i class="fas fa-cogs"></i>
-            <span class="toggle-hint">MENU</span>
-        </button>
-        <div class="tabs">
-            <div class="tab active" data-tab="planets">
-                <i class="fas fa-globe"></i> Planètes
-            </div>
-            <div class="tab" data-tab="controls">
-                <i class="fas fa-sliders-h"></i> Contrôles
-            </div>
-            <div class="tab" data-tab="effects">
-                <i class="fas fa-magic"></i> Effets
-            </div>
-        </div>
+    <!-- Barre de titre minimale -->
+    <header id="topbar">
+        <h1>SYSTÈME SOLAIRE</h1>
+        <p>Simulation interactive — échelle pédagogique</p>
+    </header>
 
-        <!-- Contenu des onglets -->
-        <div class="tab-content active" id="planets-content">
-            <div class="control-group">
-                <h3>Planètes du système solaire</h3>
-                <ul id="planets-section">
-                    <li data-planet="soleil">Soleil</li>
-                    <li data-planet="mercure">Mercure</li>
-                    <li data-planet="venus">Vénus</li>
-                    <li data-planet="terre">Terre</li>
-                    <li data-planet="mars">Mars</li>
-                    <li data-planet="jupiter">Jupiter</li>
-                    <li data-planet="saturne">Saturne</li>
-                    <li data-planet="uranus">Uranus</li>
-                    <li data-planet="neptune">Neptune</li>
-                </ul>
-            </div>
-        </div>
-
-        <div class="tab-content" id="controls-content">
-            <div class="control-group">
-                <h3>Vitesse de simulation</h3>
-                <input type="range" id="speed-slider" min="0" max="100" value="50">
-                <div class="button-group">
-                    <button id="pause-btn"><i class="fas fa-pause"></i> Pause</button>
-                    <button id="reset-btn"><i class="fas fa-redo"></i> Réinitialiser</button>
-                </div>
-            </div>
-
-            <div class="control-group">
-                <h3>Caméra</h3>
-                <button id="reset-camera-btn"><i class="fas fa-camera"></i> Réinitialiser la vue</button>
-                <div class="checkbox-group">
-                    <label>
-                        <input type="checkbox" id="show-orbits" checked>
-                        Afficher les orbites
-                    </label>
-                    <label>
-                        <input type="checkbox" id="show-textures" checked>
-                        Afficher les textures
-                    </label>
-                </div>
-            </div>
-
-            <div class="control-group">
-                <h3>Piloter le StarShip</h3>
-                <button id="toggle-starship" class="btn"><i class="fas fa-rocket"></i> Activer StarShip</button>
-                <div id="starship-controls" class="starship-form" style="display: none; margin-top: 15px;">
-                    <div style="margin-bottom: 12px;">
-                        <label style="display: block; margin-bottom: 5px; font-size: 0.9em; color: #aaa;">Destination :</label>
-                        <select id="starship-target" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: white; outline: none; cursor: pointer;">
-                            <option value="terre">Terre</option>
-                            <option value="soleil">Soleil</option>
-                            <option value="mercure">Mercure</option>
-                            <option value="venus">Vénus</option>
-                            <option value="mars">Mars</option>
-                            <option value="jupiter">Jupiter</option>
-                            <option value="saturne">Saturne</option>
-                            <option value="uranus">Uranus</option>
-                            <option value="neptune">Neptune</option>
-                        </select>
-                    </div>
-                    <div style="margin-bottom: 12px;">
-                        <label style="display: block; margin-bottom: 5px; font-size: 0.9em; color: #aaa;">Vitesse de propulsion : <span id="starship-speed-value" style="color: #ffd700; font-weight: bold;">1.0</span>x</label>
-                        <input type="range" id="starship-speed" min="0.5" max="4.0" step="0.5" value="1.0" style="width: 100%;">
-                    </div>
-                    <button id="follow-starship" class="btn focus-btn" style="width: 100%; margin: 5px 0 0 0;"><i class="fas fa-eye"></i> Suivre StarShip</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="tab-content" id="effects-content">
-            <div class="control-group">
-                <h3>Effets spéciaux</h3>
-                <button class="effect-btn" data-effect="stars">
-                    <i class="fas fa-star"></i> Animation des étoiles
-                </button>
-                <button class="effect-btn" data-effect="nebula">
-                    <i class="fas fa-cloud"></i> Effet nébuleuse
-                </button>
-                <button class="effect-btn" data-effect="meteor">
-                    <i class="fas fa-meteor"></i> Pluie de météores
-                </button>
-                <button class="effect-btn" data-effect="asteroids">
-                    <i class="fas fa-circle"></i> Ceinture d'astéroïdes
-                </button>
-                <button class="effect-btn" data-effect="comet">
-                    <i class="fas fa-bolt"></i> Comète
-                </button>
-                <button class="effect-btn" data-effect="station">
-                    <i class="fas fa-satellite"></i> Station spatiale
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Panneau détaillé de la planète -->
-    <div id="planet-detail-panel" style="display: none;">
-        <div class="detail-header">
-            <h2 id="detail-planet-name">Planète</h2>
-            <button id="close-panel" class="close-btn">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
+    <!-- Fiche détaillée (planète ou lune) -->
+    <aside id="detail-panel">
+        <button id="close-panel" title="Fermer">✕</button>
+        <span id="detail-tag"></span>
+        <h2 id="detail-name"></h2>
         <div id="planet-preview-container"></div>
-        <div class="planet-info">
-            <p><strong>Type:</strong> <span id="detail-planet-type"></span></p>
-            <p><strong>Diamètre:</strong> <span id="detail-planet-diameter"></span></p>
-            <p><strong>Distance du Soleil:</strong> <span id="detail-planet-distance"></span></p>
-            <p><strong>Période orbitale:</strong> <span id="detail-planet-orbital-period"></span></p>
-            <p><strong>Température:</strong> <span id="detail-planet-temperature"></span></p>
+        <table class="detail-table">
+            <tr><td>Type</td><td id="detail-type"></td></tr>
+            <tr><td>Diamètre</td><td id="detail-diameter"></td></tr>
+            <tr><td>Distance</td><td id="detail-distance"></td></tr>
+            <tr><td>Période orbitale</td><td id="detail-period"></td></tr>
+            <tr><td>Température</td><td id="detail-temperature"></td></tr>
+        </table>
+        <div id="detail-moons"></div>
+        <p id="detail-description"></p>
+        <label class="detail-rotate">
+            <input type="checkbox" id="detail-auto-rotate" checked>
+            Rotation automatique de l'aperçu
+        </label>
+    </aside>
+
+    <!-- Popover effets & extras -->
+    <div id="effects-popover">
+        <h3>Effets</h3>
+        <div class="popover-grid">
+            <button class="effect-btn" data-effect="stars">✦ Étoiles</button>
+            <button class="effect-btn" data-effect="nebula">☁ Nébuleuse</button>
+            <button class="effect-btn" data-effect="meteor">☄ Météores</button>
+            <button class="effect-btn" data-effect="asteroids">◦ Astéroïdes</button>
+            <button class="effect-btn" data-effect="comet">⊃ Comète</button>
+            <button class="effect-btn" data-effect="station">🛰 Station</button>
         </div>
-        <div class="detail-controls">
-            <label class="checkbox-label">
-                <input type="checkbox" id="detail-auto-rotate" checked>
-                Rotation automatique
+        <h3>Affichage</h3>
+        <label class="popover-check"><input type="checkbox" id="show-orbits" checked> Orbites</label>
+        <label class="popover-check"><input type="checkbox" id="show-labels" checked> Noms des planètes</label>
+        <h3>StarShip</h3>
+        <button id="toggle-starship" class="popover-btn">Activer StarShip</button>
+        <div id="starship-controls" style="display: none;">
+            <label class="popover-label">Destination
+                <select id="starship-target">
+                    <option value="terre">Terre</option>
+                    <option value="soleil">Soleil</option>
+                    <option value="mercure">Mercure</option>
+                    <option value="venus">Vénus</option>
+                    <option value="mars">Mars</option>
+                    <option value="jupiter">Jupiter</option>
+                    <option value="saturne">Saturne</option>
+                    <option value="uranus">Uranus</option>
+                    <option value="neptune">Neptune</option>
+                </select>
             </label>
-            <button id="detail-focus-planet" class="focus-btn">
-                <i class="fas fa-crosshairs"></i> Centrer la vue
-            </button>
+            <label class="popover-label">Propulsion <span id="starship-speed-value">1.0</span>×
+                <input type="range" id="starship-speed" min="0.5" max="4.0" step="0.5" value="1.0">
+            </label>
+            <button id="follow-starship" class="popover-btn">Suivre StarShip</button>
         </div>
+        <h3>Simulation</h3>
+        <button id="reset-btn" class="popover-btn">Réinitialiser la simulation</button>
     </div>
 
-    <!-- Message d'aide -->
-    <div id="menu-help" class="hidden">
-        Utilisez la souris pour naviguer :<br>
-        Clic gauche + déplacer = Rotation<br>
-        Molette = Zoom<br>
-        Clic droit + déplacer = Pan
-    </div>
+    <!-- Dock cinéma -->
+    <nav id="dock">
+        <div id="dock-planets"></div>
+        <div class="dock-sep"></div>
+        <div class="dock-controls">
+            <button id="pause-btn" class="dock-btn" title="Pause / Lecture">❚❚</button>
+            <input type="range" id="speed-slider" min="0" max="100" value="50" title="Vitesse de simulation">
+            <button id="tour-btn">🚀 Visite guidée</button>
+            <button id="effects-btn" class="dock-btn" title="Effets &amp; extras">✦</button>
+            <button id="reset-camera-btn" class="dock-btn" title="Vue d'ensemble">⌖</button>
+        </div>
+    </nav>
 
-    <!-- Message de chargement -->
+    <!-- Aide navigation -->
+    <div id="help-hint">clic gauche : orbite · molette : zoom · clic droit : pan</div>
+
+    <!-- Voile de chargement -->
     <div id="loading-message">
-        Chargement du système solaire...
+        <span>Chargement du système solaire…</span>
     </div>
 
-    <!-- Scripts -->
     <script type="module" src="js/main.js"></script>
 </body>
-</html> 
+</html>
