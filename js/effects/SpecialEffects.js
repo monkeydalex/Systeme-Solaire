@@ -1,21 +1,28 @@
 import * as THREE from 'three';
+import { createNoise2D } from 'simplex-noise';
+
+const noise2D = createNoise2D();
 
 export class SpecialEffectsManager {
     constructor(scene) {
         this.scene = scene;
-        
+
         // États des effets
         this.stars = null;
-        this.nebula = null;
+        this.nebulas = [];
+        this.meteorsActive = false;
         this.meteors = [];
         this.asteroidBelt = null;
+        this.asteroidData = null;
         this.comet = null;
         this.spaceStation = null;
 
         // Configuration
         this.starsCount = 6000;
-        this.asteroidsCount = 400;
+        this.asteroidsCount = 600;
         this.nextMeteorTime = 0;
+
+        this._dummy = new THREE.Object3D();
     }
 
     // --- Étoiles Scintillantes (Shader ultra-performant) ---
@@ -75,7 +82,7 @@ export class SpecialEffectsManager {
                         vColor = color;
                         // Calcul du scintillement dans le vertex shader
                         vAlpha = 0.4 + 0.6 * sin(uTime * 2.0 + phase);
-                        
+
                         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
                         gl_PointSize = size * (300.0 / -mvPosition.z);
                         gl_Position = projectionMatrix * mvPosition;
@@ -89,7 +96,7 @@ export class SpecialEffectsManager {
                         // Dessiner un point circulaire et adouci
                         float dist = length(gl_PointCoord - vec2(0.5));
                         if (dist > 0.5) discard;
-                        
+
                         float alpha = smoothstep(0.5, 0.1, dist) * vAlpha;
                         gl_FragColor = vec4(vColor, alpha);
                     }
@@ -109,63 +116,84 @@ export class SpecialEffectsManager {
         }
     }
 
-    // --- Nébuleuse Spatiale ---
-    toggleNebula(active) {
-        if (active && !this.nebula) {
-            const size = 512;
-            const canvas = document.createElement('canvas');
-            canvas.width = size;
-            canvas.height = size;
-            const ctx = canvas.getContext('2d');
+    // --- Nébuleuses (voiles fBM répartis autour de la scène) ---
+    createNebulaTexture(r, g, b) {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const imgData = ctx.createImageData(size, size);
+        const data = imgData.data;
 
-            // Dégradé radial complexe pour la nébuleuse
-            const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
-            grad.addColorStop(0, 'rgba(100, 50, 200, 0.22)');
-            grad.addColorStop(0.3, 'rgba(150, 50, 100, 0.12)');
-            grad.addColorStop(0.7, 'rgba(50, 20, 120, 0.05)');
-            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        const seedX = Math.random() * 100;
+        const seedY = Math.random() * 100;
 
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, size, size);
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                // Bruit fractal 4 octaves
+                let n = 0, amp = 0.5, freq = 1 / 90;
+                for (let o = 0; o < 4; o++) {
+                    n += amp * (noise2D(seedX + x * freq, seedY + y * freq) * 0.5 + 0.5);
+                    amp *= 0.5;
+                    freq *= 2.1;
+                }
 
-            // Taches colorées secondaires pour de la variété
-            for (let i = 0; i < 6; i++) {
-                const x = size/2 + (Math.random() - 0.5) * size * 0.4;
-                const y = size/2 + (Math.random() - 0.5) * size * 0.4;
-                const r = size * (0.15 + Math.random() * 0.2);
-                
-                const spotGrad = ctx.createRadialGradient(x, y, 0, x, y, r);
-                const col = Math.random() > 0.5 ? 'rgba(0, 180, 255, 0.06)' : 'rgba(255, 50, 150, 0.05)';
-                spotGrad.addColorStop(0, col);
-                spotGrad.addColorStop(1, 'rgba(0,0,0,0)');
-                ctx.fillStyle = spotGrad;
-                ctx.beginPath();
-                ctx.arc(x, y, r, 0, Math.PI*2);
-                ctx.fill();
+                // Atténuation radiale douce vers les bords
+                const dx = (x - size / 2) / (size / 2);
+                const dy = (y - size / 2) / (size / 2);
+                const falloff = Math.max(0, 1 - (dx * dx + dy * dy));
+
+                const v = Math.pow(n, 2.2) * falloff;
+                const idx = (y * size + x) * 4;
+                data[idx] = r;
+                data[idx + 1] = g;
+                data[idx + 2] = b;
+                data[idx + 3] = Math.min(255, v * 280);
             }
+        }
+        ctx.putImageData(imgData, 0, 0);
+        return new THREE.CanvasTexture(canvas);
+    }
 
-            const texture = new THREE.CanvasTexture(canvas);
-            const material = new THREE.SpriteMaterial({
-                map: texture,
-                transparent: true,
-                opacity: 0.8,
-                blending: THREE.AdditiveBlending
-            });
+    toggleNebula(active) {
+        if (active && this.nebulas.length === 0) {
+            // Trois voiles colorés, loin derrière les étoiles proches,
+            // répartis pour être visibles sous tous les angles de caméra
+            const configs = [
+                { color: [150, 70, 220], pos: [-320, 90, -280], scale: 380 },  // violet
+                { color: [40, 160, 255], pos: [340, -60, -300], scale: 300 },  // cyan
+                { color: [255, 90, 140], pos: [120, 150, 330], scale: 330 }    // rose
+            ];
 
-            this.nebula = new THREE.Sprite(material);
-            this.nebula.scale.set(400, 250, 1);
-            this.nebula.position.set(0, -50, -250);
-            this.scene.add(this.nebula);
-        } else if (!active && this.nebula) {
-            this.scene.remove(this.nebula);
-            this.nebula.material.map.dispose();
-            this.nebula.material.dispose();
-            this.nebula = null;
+            for (const cfg of configs) {
+                const material = new THREE.SpriteMaterial({
+                    map: this.createNebulaTexture(...cfg.color),
+                    transparent: true,
+                    opacity: 0.55,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false,
+                    rotation: Math.random() * Math.PI
+                });
+                const sprite = new THREE.Sprite(material);
+                sprite.position.set(...cfg.pos);
+                sprite.scale.set(cfg.scale, cfg.scale * 0.65, 1);
+                this.scene.add(sprite);
+                this.nebulas.push(sprite);
+            }
+        } else if (!active && this.nebulas.length > 0) {
+            for (const nebula of this.nebulas) {
+                this.scene.remove(nebula);
+                nebula.material.map.dispose();
+                nebula.material.dispose();
+            }
+            this.nebulas = [];
         }
     }
 
     // --- Pluie de Météores (Étoiles Filantes) ---
     toggleMeteors(active) {
+        this.meteorsActive = active;
         if (!active && this.meteors.length > 0) {
             this.meteors.forEach(m => {
                 this.scene.remove(m.mesh);
@@ -177,33 +205,36 @@ export class SpecialEffectsManager {
     }
 
     createMeteor() {
-        const length = 5 + Math.random() * 10;
-        // Créer un trait lumineux effilé
-        const geometry = new THREE.CylinderGeometry(0.0, 0.15, length, 4);
+        const length = 6 + Math.random() * 12;
+        // Trait effilé : tête large (+Y) vers pointe fine (-Y)
+        const geometry = new THREE.CylinderGeometry(0.16, 0.0, length, 5);
+        geometry.translate(0, -length / 2, 0); // tête à l'origine, traînée derrière
+
+        const warm = Math.random() > 0.4;
         const material = new THREE.MeshBasicMaterial({
-            color: 0xffddaa,
+            color: warm ? 0xffddaa : 0xcfe4ff,
             transparent: true,
-            opacity: 0.8,
-            blending: THREE.AdditiveBlending
+            opacity: 0.9,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
         });
         const mesh = new THREE.Mesh(geometry, material);
 
-        // Position de départ haute et éloignée
         mesh.position.set(
             (Math.random() - 0.5) * 400,
-            120 + Math.random() * 30,
+            110 + Math.random() * 40,
             (Math.random() - 0.5) * 400
         );
-
-        // Rotation pour pointer dans le sens de la chute (diagonale)
-        mesh.rotation.z = Math.PI / 4 + (Math.random() - 0.5) * 0.2;
-        mesh.rotation.x = (Math.random() - 0.5) * 0.2;
 
         const velocity = new THREE.Vector3(
             -1.5 - Math.random() * 1.5,
             -2.0 - Math.random() * 2.0,
-            (Math.random() - 0.5) * 0.5
+            (Math.random() - 0.5) * 0.8
         );
+
+        // Orienter la tête (+Y local) dans la direction du vol
+        const dir = velocity.clone().normalize();
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
 
         this.meteors.push({
             mesh,
@@ -215,167 +246,217 @@ export class SpecialEffectsManager {
         this.scene.add(mesh);
     }
 
-    // --- Ceinture d'Astéroïdes (Rochers irréguliers) ---
+    // --- Ceinture d'Astéroïdes (InstancedMesh : un seul draw call) ---
     toggleAsteroids(active) {
         if (active && !this.asteroidBelt) {
-            this.asteroidBelt = new THREE.Group();
-            
-            // Matériau rocheux
+            // Une géométrie rocheuse partagée, déformée pour casser la régularité
+            const geometry = new THREE.DodecahedronGeometry(1, 1);
+            const pos = geometry.attributes.position;
+            for (let j = 0; j < pos.count; j++) {
+                pos.setX(j, pos.getX(j) + (Math.random() - 0.5) * 0.35);
+                pos.setY(j, pos.getY(j) + (Math.random() - 0.5) * 0.35);
+                pos.setZ(j, pos.getZ(j) + (Math.random() - 0.5) * 0.35);
+            }
+            geometry.computeVertexNormals();
+
             const material = new THREE.MeshStandardMaterial({
-                color: 0x6e635b,
+                color: 0x8a7d72,
                 roughness: 0.9,
                 metalness: 0.1,
-                flatShading: true // Aspect anguleux rocheux
+                flatShading: true
             });
 
+            this.asteroidBelt = new THREE.InstancedMesh(geometry, material, this.asteroidsCount);
+            this.asteroidBelt.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+            // Données orbitales par instance
+            this.asteroidData = [];
             for (let i = 0; i < this.asteroidsCount; i++) {
-                // Créer des formes irrégulières
-                const radius = 0.12 + Math.random() * 0.28;
-                const geometry = new THREE.DodecahedronGeometry(radius, 1);
-                
-                // Déformer légèrement les sommets pour casser la régularité
-                const pos = geometry.attributes.position;
-                for (let j = 0; j < pos.count; j++) {
-                    pos.setX(j, pos.getX(j) + (Math.random() - 0.5) * radius * 0.3);
-                    pos.setY(j, pos.getY(j) + (Math.random() - 0.5) * radius * 0.3);
-                    pos.setZ(j, pos.getZ(j) + (Math.random() - 0.5) * radius * 0.3);
-                }
-                geometry.computeVertexNormals();
-
-                const asteroid = new THREE.Mesh(geometry, material);
-
-                // Positionnement dans la ceinture entre Mars et Jupiter (distances 30 et 40)
-                const dist = 33 + Math.random() * 5;
-                const angle = Math.random() * Math.PI * 2;
-                const height = (Math.random() - 0.5) * 1.8;
-
-                asteroid.position.set(
-                    Math.cos(angle) * dist,
-                    height,
-                    Math.sin(angle) * dist
-                );
-
-                // Rotations aléatoires
-                asteroid.rotation.set(
-                    Math.random() * Math.PI,
-                    Math.random() * Math.PI,
-                    Math.random() * Math.PI
-                );
-
-                asteroid.userData = {
-                    orbitAngle: angle,
-                    orbitRadius: dist,
-                    orbitSpeed: (0.0005 + Math.random() * 0.001),
+                this.asteroidData.push({
+                    angle: Math.random() * Math.PI * 2,
+                    radius: 33 + Math.random() * 5,
+                    height: (Math.random() - 0.5) * 2.0,
+                    orbitSpeed: 0.0005 + Math.random() * 0.001,
+                    scale: 0.1 + Math.random() * 0.28,
+                    rotX: Math.random() * Math.PI,
+                    rotY: Math.random() * Math.PI,
                     rotSpeedX: (Math.random() - 0.5) * 0.02,
                     rotSpeedY: (Math.random() - 0.5) * 0.02
-                };
-
-                asteroid.castShadow = true;
-                asteroid.receiveShadow = true;
-                this.asteroidBelt.add(asteroid);
+                });
             }
+            this.updateAsteroidMatrices(0);
 
             this.scene.add(this.asteroidBelt);
         } else if (!active && this.asteroidBelt) {
             this.scene.remove(this.asteroidBelt);
-            this.asteroidBelt.children.forEach(c => {
-                c.geometry.dispose();
-            });
+            this.asteroidBelt.geometry.dispose();
+            this.asteroidBelt.material.dispose();
+            this.asteroidBelt.dispose();
             this.asteroidBelt = null;
+            this.asteroidData = null;
         }
     }
 
-    // --- Comète (avec noyau glacé et queue lumineuse) ---
+    updateAsteroidMatrices(speed) {
+        const dummy = this._dummy;
+        for (let i = 0; i < this.asteroidsCount; i++) {
+            const a = this.asteroidData[i];
+            a.angle += a.orbitSpeed * speed;
+            a.rotX += a.rotSpeedX * speed;
+            a.rotY += a.rotSpeedY * speed;
+
+            dummy.position.set(
+                Math.cos(a.angle) * a.radius,
+                a.height,
+                Math.sin(a.angle) * a.radius
+            );
+            dummy.rotation.set(a.rotX, a.rotY, 0);
+            dummy.scale.setScalar(a.scale);
+            dummy.updateMatrix();
+            this.asteroidBelt.setMatrixAt(i, dummy.matrix);
+        }
+        this.asteroidBelt.instanceMatrix.needsUpdate = true;
+    }
+
+    // --- Comète : noyau + coma + double queue anti-solaire, orbite à foyer ---
     toggleComet(active) {
         if (active && !this.comet) {
             this.comet = new THREE.Group();
 
-            // Noyau
+            // Noyau glacé
             const nucleusGeo = new THREE.DodecahedronGeometry(0.3, 1);
             const nucleusMat = new THREE.MeshBasicMaterial({ color: 0xddf0ff });
-            const nucleus = new THREE.Mesh(nucleusGeo, nucleusMat);
-            this.comet.add(nucleus);
+            this.comet.add(new THREE.Mesh(nucleusGeo, nucleusMat));
 
-            // Queue de la comète (Cône transparent)
-            const tailGeo = new THREE.ConeGeometry(0.5, 7, 8, 1, true);
-            // Déplacer le pivot du cône à sa pointe
-            tailGeo.translate(0, -3.5, 0);
-            
-            const tailMat = new THREE.MeshBasicMaterial({
-                color: 0x90b0ff,
+            // Coma : halo autour du noyau
+            const comaCanvas = document.createElement('canvas');
+            comaCanvas.width = comaCanvas.height = 64;
+            const cctx = comaCanvas.getContext('2d');
+            const comaGrad = cctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            comaGrad.addColorStop(0, 'rgba(210, 235, 255, 0.9)');
+            comaGrad.addColorStop(0.4, 'rgba(150, 200, 255, 0.35)');
+            comaGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            cctx.fillStyle = comaGrad;
+            cctx.fillRect(0, 0, 64, 64);
+            const comaMat = new THREE.SpriteMaterial({
+                map: new THREE.CanvasTexture(comaCanvas),
                 transparent: true,
-                opacity: 0.35,
                 blending: THREE.AdditiveBlending,
-                side: THREE.DoubleSide
+                depthWrite: false,
+                opacity: 0.9
             });
-            const tail = new THREE.Mesh(tailGeo, tailMat);
-            
-            // Pointer la queue à l'opposé du mouvement (pivotée de 90 deg pour être horizontale)
-            tail.rotation.x = -Math.PI / 2; 
-            this.comet.add(tail);
+            const coma = new THREE.Sprite(comaMat);
+            coma.scale.set(2.2, 2.2, 1);
+            this.comet.add(coma);
 
-            // Paramètres orbitaux très elliptiques
+            // Queue ionique : longue, fine, bleutée — pointe à l'opposé du Soleil (-Y local)
+            const ionGeo = new THREE.ConeGeometry(0.35, 10, 8, 1, true);
+            ionGeo.translate(0, -5, 0); // pointe au noyau, s'étend vers -Y
+            const ionMat = new THREE.MeshBasicMaterial({
+                color: 0x88b8ff,
+                transparent: true,
+                opacity: 0.30,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            this.comet.add(new THREE.Mesh(ionGeo, ionMat));
+
+            // Queue de poussière : plus courte, large, chaude, légèrement incurvée
+            const dustGeo = new THREE.ConeGeometry(0.75, 6, 8, 1, true);
+            dustGeo.translate(0, -3, 0);
+            const dustMat = new THREE.MeshBasicMaterial({
+                color: 0xffeecc,
+                transparent: true,
+                opacity: 0.18,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const dustTail = new THREE.Mesh(dustGeo, dustMat);
+            dustTail.rotation.z = 0.22; // décalée de la queue ionique
+            this.comet.add(dustTail);
+
+            // Orbite elliptique avec le Soleil au foyer (périhélie proche)
+            const a = 60, b = 26;
             this.comet.userData = {
-                angle: 0,
-                orbitRadiusX: 85,
-                orbitRadiusZ: 35,
-                speed: 0.003
+                angle: Math.random() * Math.PI * 2,
+                a,
+                b,
+                c: Math.sqrt(a * a - b * b), // décalage du foyer
+                speed: 0.004
             };
 
             this.scene.add(this.comet);
         } else if (!active && this.comet) {
             this.scene.remove(this.comet);
-            this.comet.children.forEach(c => c.geometry.dispose());
+            this.comet.traverse(child => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (child.material.map) child.material.map.dispose();
+                    child.material.dispose();
+                }
+            });
             this.comet = null;
         }
     }
 
-    // --- Station Spatiale (ISS style autour de la Terre) ---
+    // --- Station Spatiale (ISS-like autour de la Terre) ---
     toggleSpaceStation(active) {
         if (active && !this.spaceStation) {
             this.spaceStation = new THREE.Group();
 
-            // Structure cylindrique centrale
-            const moduleGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.2, 8);
-            const metalMat = new THREE.MeshStandardMaterial({ color: 0xdcdcdc, roughness: 0.4, metalness: 0.8 });
-            const mainModule = new THREE.Mesh(moduleGeo, metalMat);
-            mainModule.rotation.z = Math.PI / 2;
-            this.spaceStation.add(mainModule);
-
-            // Panneaux solaires (bleus scintillants)
-            const panelGeo = new THREE.BoxGeometry(0.03, 0.4, 1.4);
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0xdcdcdc, roughness: 0.35, metalness: 0.8 });
             const panelMat = new THREE.MeshStandardMaterial({
-                color: 0x053570,
-                roughness: 0.1,
-                metalness: 0.9,
-                emissive: 0x011030
+                color: 0x0a3f85,
+                roughness: 0.15,
+                metalness: 0.85,
+                emissive: 0x06204a
             });
 
-            const p1 = new THREE.Mesh(panelGeo, panelMat);
-            p1.position.set(-0.6, 0, 0);
-            const p2 = new THREE.Mesh(panelGeo, panelMat);
-            p2.position.set(0.6, 0, 0);
+            // Poutre principale
+            const truss = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.07, 0.07), metalMat);
+            this.spaceStation.add(truss);
 
-            this.spaceStation.add(p1);
-            this.spaceStation.add(p2);
+            // 4 panneaux solaires par paires aux extrémités
+            const panelGeo = new THREE.BoxGeometry(0.55, 0.015, 0.4);
+            for (const [x, z] of [[-1.0, 0.28], [-1.0, -0.28], [1.0, 0.28], [1.0, -0.28]]) {
+                const panel = new THREE.Mesh(panelGeo, panelMat);
+                panel.position.set(x, 0, z);
+                this.spaceStation.add(panel);
+            }
 
-            this.spaceStation.scale.set(0.8, 0.8, 0.8);
+            // Modules pressurisés en croix au centre
+            const moduleA = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.9, 12), metalMat);
+            moduleA.rotation.x = Math.PI / 2; // le long de Z
+            this.spaceStation.add(moduleA);
+
+            const moduleB = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.5, 12), metalMat);
+            this.spaceStation.add(moduleB); // vertical
+
+            // Coupole / antenne parabolique
+            const dish = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), metalMat);
+            dish.position.set(0, 0.3, 0);
+            this.spaceStation.add(dish);
+
             this.spaceStation.userData = {
                 angle: 0,
-                orbitRadius: 2.2, // Proche de la Terre
+                orbitRadius: 2.3,
                 orbitSpeed: 0.02
             };
 
             this.scene.add(this.spaceStation);
         } else if (!active && this.spaceStation) {
             this.scene.remove(this.spaceStation);
-            this.spaceStation.children.forEach(c => c.geometry.dispose());
+            this.spaceStation.traverse(child => {
+                if (child.geometry) child.geometry.dispose();
+            });
             this.spaceStation = null;
         }
     }
 
     // --- Boucle de Mise à jour d'Animation ---
-    update(speed, planets, postProcessingComposer) {
+    update(speed, planets) {
         const time = Date.now() * 0.001;
 
         // 1. Étoiles
@@ -383,14 +464,13 @@ export class SpecialEffectsManager {
             this.stars.material.uniforms.uTime.value = time;
         }
 
-        // 2. Nébuleuse
-        if (this.nebula) {
-            this.nebula.rotation.z += 0.0003 * speed;
+        // 2. Nébuleuses : dérive très lente
+        for (const nebula of this.nebulas) {
+            nebula.material.rotation += 0.0001 * speed;
         }
 
-        // 3. Météores
-        if (this.meteors.length > 0 || (this.stars && Math.random() < 0.02 * speed)) {
-            // Créer un météore de temps en temps si l'effet d'étoiles est actif
+        // 3. Météores : spawn uniquement si l'effet est activé
+        if (this.meteorsActive) {
             const now = Date.now();
             if (now > this.nextMeteorTime && this.meteors.length < 15) {
                 this.createMeteor();
@@ -403,10 +483,10 @@ export class SpecialEffectsManager {
             const m = this.meteors[i];
             m.mesh.position.addScaledVector(m.velocity, speed);
             m.age += speed;
-            
+
             // Fade-out à la fin
             if (m.age > m.maxAge - 10) {
-                m.mesh.material.opacity = Math.max(0, (m.maxAge - m.age) / 10);
+                m.mesh.material.opacity = Math.max(0, (m.maxAge - m.age) / 10) * 0.9;
             }
 
             if (m.age >= m.maxAge || m.mesh.position.y < -50) {
@@ -417,66 +497,56 @@ export class SpecialEffectsManager {
             }
         }
 
-        // 4. Ceinture d'Astéroïdes
+        // 4. Ceinture d'Astéroïdes (matrices d'instances)
         if (this.asteroidBelt) {
-            this.asteroidBelt.children.forEach(asteroid => {
-                const ud = asteroid.userData;
-                ud.orbitAngle += ud.orbitSpeed * speed;
-                asteroid.position.x = Math.cos(ud.orbitAngle) * ud.orbitRadius;
-                asteroid.position.z = Math.sin(ud.orbitAngle) * ud.orbitRadius;
-                
-                asteroid.rotation.x += ud.rotSpeedX * speed;
-                asteroid.rotation.y += ud.rotSpeedY * speed;
-            });
+            this.updateAsteroidMatrices(speed);
         }
 
-        // 5. Comète
+        // 5. Comète : orbite à foyer, plus rapide au périhélie, queues anti-solaires
         if (this.comet) {
             const ud = this.comet.userData;
-            ud.angle += ud.speed * speed;
-
-            // Orbite Keplerienne / Elliptique
-            const prevX = this.comet.position.x;
-            const prevZ = this.comet.position.z;
-
-            this.comet.position.x = Math.cos(ud.angle) * ud.orbitRadiusX;
-            this.comet.position.z = Math.sin(ud.angle) * ud.orbitRadiusZ;
-            // Inclinaison de l'orbite
-            this.comet.position.y = Math.cos(ud.angle) * 12;
-
-            // Orienter la queue de la comète à l'opposé de son vecteur vitesse
-            const velocity = new THREE.Vector3(
-                this.comet.position.x - prevX,
-                this.comet.position.y - this.comet.position.y, // Simplifié sur le plan X/Z
-                this.comet.position.z - prevZ
+            this.comet.position.set(
+                Math.cos(ud.angle) * ud.a - ud.c,
+                Math.sin(ud.angle) * 6,
+                Math.sin(ud.angle) * ud.b
             );
-            if (velocity.lengthSq() > 0.0001) {
-                velocity.normalize();
-                // Faire pivoter le groupe pour orienter la queue (qui est sur l'axe Z négatif du groupe)
-                const targetPoint = this.comet.position.clone().add(velocity);
-                this.comet.lookAt(targetPoint);
+
+            const r = this.comet.position.length();
+            // Accélération képlérienne approchée près du Soleil
+            ud.angle += ud.speed * (28 / Math.max(r, 6)) * speed;
+
+            // Les queues (axe -Y local) pointent à l'opposé du Soleil (origine)
+            if (r > 0.001) {
+                const awayFromSun = this.comet.position.clone().normalize();
+                this.comet.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), awayFromSun);
+            }
+
+            // La coma s'intensifie près du Soleil
+            const coma = this.comet.children[1];
+            if (coma && coma.material) {
+                coma.material.opacity = THREE.MathUtils.clamp(1.6 - r / 40, 0.25, 1);
             }
         }
 
         // 6. Station Spatiale (ISS) autour de la Terre
         if (this.spaceStation && planets['terre']) {
-            const earthMesh = planets['terre'].group;
+            const earthGroup = planets['terre'].group;
             const ud = this.spaceStation.userData;
             ud.angle += ud.orbitSpeed * speed;
 
-            // Position relative à la Terre
+            // Orbite légèrement inclinée autour de la Terre
             const offsetX = Math.cos(ud.angle) * ud.orbitRadius;
             const offsetZ = Math.sin(ud.angle) * ud.orbitRadius;
-            const offsetY = Math.sin(ud.angle * 0.5) * 0.4; // Inclinaison de l'orbite
+            const offsetY = Math.sin(ud.angle) * 0.5;
 
             this.spaceStation.position.set(
-                earthMesh.position.x + offsetX,
-                earthMesh.position.y + offsetY,
-                earthMesh.position.z + offsetZ
+                earthGroup.position.x + offsetX,
+                earthGroup.position.y + offsetY,
+                earthGroup.position.z + offsetZ
             );
 
-            // Faire pointer la station vers la Terre
-            this.spaceStation.lookAt(earthMesh.position);
+            // Garder la poutre tangente à l'orbite
+            this.spaceStation.lookAt(earthGroup.position);
         }
     }
 }
