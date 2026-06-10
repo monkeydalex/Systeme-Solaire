@@ -175,6 +175,21 @@ export class UIManager {
         const toggleBtn = document.getElementById('toggle-starship');
         const controlsDiv = document.getElementById('starship-controls');
 
+        // Construire la liste des destinations : planètes puis lunes
+        const select = document.getElementById('starship-target');
+        const planetGroup = document.createElement('optgroup');
+        planetGroup.label = 'Planètes';
+        const moonGroup = document.createElement('optgroup');
+        moonGroup.label = 'Lunes';
+        for (const [key, entry] of Object.entries(this.bodyIndex)) {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = entry.data.nom;
+            (entry.parentKey ? moonGroup : planetGroup).appendChild(option);
+        }
+        select.append(planetGroup, moonGroup);
+        select.value = 'terre';
+
         toggleBtn.addEventListener('click', () => {
             toggleBtn.classList.toggle('active');
             const active = toggleBtn.classList.contains('active');
@@ -202,6 +217,35 @@ export class UIManager {
             followBtn.textContent = active ? 'Ne plus suivre' : 'Suivre StarShip';
             this.callbacks.onStarshipFollow(active);
         });
+    }
+
+    // HUD de mission StarShip : statut + progression, mis à jour chaque frame
+    updateStarshipStatus(status) {
+        if (!status) return;
+        // Articles français : la Terre, la Lune, le Soleil ; les autres sans article
+        const articles = { soleil: 'le Soleil', terre: 'la Terre', lune: 'la Lune' };
+        const nameOf = (key) => articles[key] ||
+            (this.bodyIndex[key] ? this.bodyIndex[key].data.nom : key);
+        const deNameOf = (key) => {
+            if (key === 'soleil') return 'du Soleil';
+            if (articles[key]) return `de ${articles[key]}`;
+            return `de ${nameOf(key)}`;
+        };
+
+        let text;
+        if (status.state === 'traveling') {
+            text = `En route vers ${nameOf(status.targetKey)} — dist. ${status.distance.toFixed(1)} u`;
+        } else {
+            text = `En orbite autour ${deNameOf(status.currentKey)}`;
+            // Synchroniser le select avec la position réelle
+            const select = document.getElementById('starship-target');
+            if (select.value !== status.currentKey) select.value = status.currentKey;
+        }
+
+        const textEl = document.getElementById('starship-status-text');
+        if (textEl.textContent !== text) textEl.textContent = text;
+        document.getElementById('starship-progress').style.width =
+            `${Math.round(status.progress * 100)}%`;
     }
 
     // --- Fiche détaillée ---

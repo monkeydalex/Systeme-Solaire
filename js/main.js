@@ -64,7 +64,8 @@ class App {
         });
 
         // 4. Initialiser le Starship (orbite la Terre par défaut)
-        this.starship = new Starship(scene, 'terre', this.planets);
+        // Destinations possibles : planètes et lunes
+        this.starship = new Starship(scene, 'terre', { ...this.planets, ...this.moons });
         // Cacher la fusée initialement (elle sera activée via l'UI)
         this.starship.group.visible = false;
         this.starship.particlesGroup.visible = false;
@@ -252,7 +253,7 @@ class App {
 
         // Réinitialiser le Starship vers la Terre
         this.starship.destroy();
-        this.starship = new Starship(this.sceneManager.scene, 'terre', this.planets);
+        this.starship = new Starship(this.sceneManager.scene, 'terre', { ...this.planets, ...this.moons });
         const toggleBtn = document.getElementById('toggle-starship');
         if (toggleBtn) {
             toggleBtn.classList.remove('active');
@@ -315,9 +316,10 @@ class App {
             moon.update(speed, this.showOrbits);
         }
 
-        // 2. Mettre à jour le Starship
+        // 2. Mettre à jour le Starship et son HUD de mission
         if (this.starship && this.starship.group.visible) {
             this.starship.update(speed);
+            this.uiManager.updateStarshipStatus(this.starship.getStatus());
         }
 
         // 3. Mettre à jour les effets spéciaux
