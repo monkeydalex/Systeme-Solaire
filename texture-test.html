@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Textures</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .texture-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .texture-item {
+            background-color: white;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .texture-item h3 {
+            margin-top: 0;
+            text-align: center;
+        }
+        .texture-preview {
+            width: 100%;
+            height: 150px;
+            background-size: cover;
+            background-position: center;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .texture-status {
+            text-align: center;
+            font-weight: bold;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+        button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            background-color: #4a9df8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #3a7dca;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test de Textures</h1>
+    <p>Cette page teste si les textures des planètes sont correctement chargées.</p>
+    
+    <button id="test-textures">Tester les textures</button>
+    
+    <div class="texture-container" id="texture-results">
+        <!-- Les résultats des tests seront affichés ici -->
+    </div>
+    
+    <script>
+        document.getElementById('test-textures').addEventListener('click', testTextures);
+        
+        function testTextures() {
+            const texturePaths = {
+                'Soleil': 'textures/sun.jpg',
+                'Mercure': 'textures/mercury.jpg',
+                'Vénus': 'textures/venus.jpg',
+                'Terre': 'textures/earth.jpg',
+                'Mars': 'textures/mars.jpg',
+                'Jupiter': 'textures/jupiter.jpg',
+                'Saturne': 'textures/saturn.jpg',
+                'Uranus': 'textures/uranus.jpg',
+                'Neptune': 'textures/neptune.jpg'
+            };
+            
+            const resultsContainer = document.getElementById('texture-results');
+            resultsContainer.innerHTML = '';
+            
+            for (const [name, path] of Object.entries(texturePaths)) {
+                const textureItem = document.createElement('div');
+                textureItem.className = 'texture-item';
+                
+                const title = document.createElement('h3');
+                title.textContent = name;
+                textureItem.appendChild(title);
+                
+                const preview = document.createElement('div');
+                preview.className = 'texture-preview';
+                textureItem.appendChild(preview);
+                
+                const status = document.createElement('div');
+                status.className = 'texture-status';
+                textureItem.appendChild(status);
+                
+                resultsContainer.appendChild(textureItem);
+                
+                // Tester le chargement de la texture
+                const img = new Image();
+                img.onload = function() {
+                    preview.style.backgroundImage = `url(${path})`;
+                    status.textContent = 'Chargée';
+                    status.classList.add('success');
+                };
+                img.onerror = function() {
+                    preview.style.backgroundColor = '#ffdddd';
+                    status.textContent = 'Erreur';
+                    status.classList.add('error');
+                };
+                img.src = path;
+            }
+        }
+    </script>
+</body>
+</html> 
