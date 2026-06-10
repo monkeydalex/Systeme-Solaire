@@ -31,8 +31,8 @@ export class Planet {
         const geometry = new THREE.SphereGeometry(this.data.rayon, 64, 64);
 
         // 2. Texture & Matériau
-        const texture = this.getOrCreateProceduralTexture();
-        
+        const texture = this.loadTexture();
+
         let material;
         if (this.key === 'soleil') {
             material = new THREE.MeshBasicMaterial({
@@ -63,8 +63,9 @@ export class Planet {
         // 3. Cas spécifiques
         // A. Soleil (Lumière + Lueur)
         if (this.key === 'soleil') {
-            // PointLight centrale puissante
-            this.light = new THREE.PointLight(0xffffff, 2.5, 500, 0.5);
+            // PointLight centrale puissante (decay 0 : pas d'atténuation,
+            // les distances de la scène sont pédagogiques, pas physiques)
+            this.light = new THREE.PointLight(0xffffff, 2.2, 0, 0);
             this.light.castShadow = true;
             this.light.shadow.mapSize.width = 2048;
             this.light.shadow.mapSize.height = 2048;
@@ -245,6 +246,30 @@ export class Planet {
             this.orbitMesh.geometry.dispose();
             this.orbitMesh.material.dispose();
         }
+    }
+
+    // Charge la vraie texture JPG ; retombe sur la texture procédurale en cas d'échec
+    loadTexture() {
+        if (!this.data.texture) return this.getOrCreateProceduralTexture();
+
+        const loader = new THREE.TextureLoader();
+        const texture = loader.load(
+            this.data.texture,
+            undefined,
+            undefined,
+            () => {
+                console.warn(`Texture introuvable pour ${this.key}, fallback procédural`);
+                const fallback = this.getOrCreateProceduralTexture();
+                if (this.mesh) {
+                    this.mesh.material.map = fallback;
+                    if (this.mesh.material.bumpMap) this.mesh.material.bumpMap = fallback;
+                    this.mesh.material.needsUpdate = true;
+                }
+            }
+        );
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 8;
+        return texture;
     }
 
     // --- Générateurs Procéduraux Avancés de Textures ---

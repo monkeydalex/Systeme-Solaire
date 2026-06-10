@@ -1,4 +1,5 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
+import gsap from 'gsap';
 import { SceneManager } from './core/SceneManager.js';
 import { Planet } from './objects/Planet.js';
 import { Starship } from './objects/Starship.js';
@@ -17,7 +18,7 @@ class App {
         this.planets = {};
         this.starship = null;
         
-        // États globaux
+        // Ã‰tats globaux
         this.simulationSpeed = 1.0;
         this.isPaused = false;
         this.showOrbits = true;
@@ -28,7 +29,7 @@ class App {
     }
 
     init() {
-        // 1. Initialiser le gestionnaire de scène
+        // 1. Initialiser le gestionnaire de scÃ¨ne
         const container = document.getElementById('scene-container');
         this.sceneManager = new SceneManager();
         this.sceneManager.init(container);
@@ -40,20 +41,20 @@ class App {
         // 2. Initialiser le post-processing (Bloom)
         this.postProcessing = new PostProcessing(renderer, scene, camera);
 
-        // 3. Créer les planètes
+        // 3. CrÃ©er les planÃ¨tes
         for (const [key, data] of Object.entries(planetData)) {
             this.planets[key] = new Planet(key, data, scene);
         }
 
-        // 4. Initialiser le Starship (orbite la Terre par défaut)
+        // 4. Initialiser le Starship (orbite la Terre par dÃ©faut)
         this.starship = new Starship(scene, 'terre', this.planets);
-        // Cacher la fusée initialement (elle sera activée via l'UI)
+        // Cacher la fusÃ©e initialement (elle sera activÃ©e via l'UI)
         this.starship.group.visible = false;
         this.starship.particlesGroup.visible = false;
 
-        // 5. Initialiser les effets spéciaux
+        // 5. Initialiser les effets spÃ©ciaux
         this.effectsManager = new SpecialEffectsManager(scene);
-        // Activer les étoiles par défaut pour l'immersion
+        // Activer les Ã©toiles par dÃ©faut pour l'immersion
         this.effectsManager.toggleStars(true);
         const starBtn = document.querySelector('.effect-btn[data-effect="stars"]');
         if (starBtn) starBtn.classList.add('active');
@@ -74,7 +75,7 @@ class App {
                 this.focusedPlanetKey = null;
                 this.cameraFollowingStarship = false;
                 
-                // Réinitialiser la caméra générale avec transition fluide
+                // RÃ©initialiser la camÃ©ra gÃ©nÃ©rale avec transition fluide
                 gsap.to(camera.position, { x: 0, y: 60, z: 130, duration: 1.2, ease: "power2.out" });
                 gsap.to(this.sceneManager.controls.target, { x: 0, y: 0, z: 0, duration: 1.2, ease: "power2.out" });
             },
@@ -93,7 +94,7 @@ class App {
                 this.focusedPlanetKey = planetKey;
                 this.cameraFollowingStarship = false;
                 
-                // Décocher le suivi de la caméra du Starship si nécessaire
+                // DÃ©cocher le suivi de la camÃ©ra du Starship si nÃ©cessaire
                 const followBtn = document.getElementById('follow-starship');
                 if (followBtn) {
                     followBtn.classList.remove('active');
@@ -116,7 +117,7 @@ class App {
             onStarshipFollow: (active) => {
                 this.cameraFollowingStarship = active;
                 if (active) {
-                    this.focusedPlanetKey = null; // Désactiver le focus planète
+                    this.focusedPlanetKey = null; // DÃ©sactiver le focus planÃ¨te
                 }
             },
             getPlanetData: (planetKey) => {
@@ -124,14 +125,19 @@ class App {
             }
         });
 
-        // 7. Raycasting pour clics sur la scène
+        // 7. Raycasting pour clics sur la scÃ¨ne
         this.setupRaycasting();
+
+        // Redimensionner le post-processing avec la fenÃªtre
+        window.addEventListener('resize', () => {
+            this.postProcessing.resize(window.innerWidth, window.innerHeight);
+        });
 
         // Masquer le message de chargement de l'HTML d'origine
         const loader = document.getElementById('loading-message');
         if (loader) loader.style.display = 'none';
 
-        // 8. Démarrer la boucle de rendu
+        // 8. DÃ©marrer la boucle de rendu
         this.animate();
     }
 
@@ -140,16 +146,16 @@ class App {
         const mouse = new THREE.Vector2();
 
         window.addEventListener('click', (event) => {
-            // Empêcher le clic de se propager si on clique sur l'UI
+            // EmpÃªcher le clic de se propager si on clique sur l'UI
             if (event.target.tagName !== 'CANVAS') return;
             
-            // Calculer la position normalisée de la souris
+            // Calculer la position normalisÃ©e de la souris
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
             raycaster.setFromCamera(mouse, this.sceneManager.camera);
             
-            // Intersection avec les sphères des planètes uniquement
+            // Intersection avec les sphÃ¨res des planÃ¨tes uniquement
             const planetMeshes = Object.values(this.planets).map(p => p.mesh);
             const intersects = raycaster.intersectObjects(planetMeshes);
 
@@ -158,7 +164,7 @@ class App {
                 const clickedKey = Object.keys(this.planets).find(k => this.planets[k].mesh === clickedMesh);
                 
                 if (clickedKey) {
-                    // Sélectionner la planète dans la liste latérale
+                    // SÃ©lectionner la planÃ¨te dans la liste latÃ©rale
                     const planetListItems = document.querySelectorAll('#planets-section li');
                     planetListItems.forEach(item => {
                         if (item.getAttribute('data-planet') === clickedKey) {
@@ -189,13 +195,13 @@ class App {
         const pauseBtn = document.getElementById('pause-btn');
         if (pauseBtn) pauseBtn.innerHTML = '<i class="fas fa-pause"></i> Pause';
 
-        // Réinitialiser les angles des planètes
+        // RÃ©initialiser les angles des planÃ¨tes
         for (const planet of Object.values(this.planets)) {
             planet.angle = Math.random() * Math.PI * 2;
             planet.updatePosition();
         }
 
-        // Réinitialiser le Starship vers la Terre
+        // RÃ©initialiser le Starship vers la Terre
         this.starship.destroy();
         this.starship = new Starship(this.sceneManager.scene, 'terre', this.planets);
         const toggleBtn = document.getElementById('toggle-starship');
@@ -206,7 +212,7 @@ class App {
         const controlsDiv = document.getElementById('starship-controls');
         if (controlsDiv) controlsDiv.style.display = 'none';
 
-        // Réinitialiser la caméra
+        // RÃ©initialiser la camÃ©ra
         gsap.to(this.sceneManager.camera.position, { x: 0, y: 60, z: 130, duration: 1.0 });
         gsap.to(this.sceneManager.controls.target, { x: 0, y: 0, z: 0, duration: 1.0 });
     }
@@ -215,83 +221,8 @@ class App {
         const p = this.planets[planetKey];
         if (!p) return null;
 
-        // Informations réelles astronomiques pour rendre la simulation de haute qualité
-        const realFacts = {
-            soleil: {
-                type: "Étoile naine jaune",
-                diametre: "1 392 700 km",
-                distance: "Centre",
-                periode: "N/A",
-                temperature: "~5 500 °C",
-                color: "#ffcc00"
-            },
-            mercure: {
-                type: "Planète tellurique",
-                diametre: "4 879 km",
-                distance: "57,9 millions km",
-                periode: "88 jours",
-                temperature: "-173 à 427 °C",
-                color: "#a0a0a0"
-            },
-            venus: {
-                type: "Planète tellurique",
-                diametre: "12 104 km",
-                distance: "108,2 millions km",
-                periode: "224,7 jours",
-                temperature: "462 °C",
-                color: "#e6c8a0"
-            },
-            terre: {
-                type: "Planète tellurique (Habitable)",
-                diametre: "12 742 km",
-                distance: "149,6 millions km",
-                periode: "365,25 jours",
-                temperature: "-89 à 58 °C",
-                color: "#3366cc"
-            },
-            mars: {
-                type: "Planète tellurique",
-                diametre: "6 779 km",
-                distance: "227,9 millions km",
-                periode: "687 jours",
-                temperature: "-143 à 35 °C",
-                color: "#cc6633"
-            },
-            jupiter: {
-                type: "Géante gazeuse",
-                diametre: "139 820 km",
-                distance: "778,5 millions km",
-                periode: "11,86 ans",
-                temperature: "-108 °C",
-                color: "#e0c8a0"
-            },
-            saturne: {
-                type: "Géante gazeuse",
-                diametre: "116 460 km",
-                distance: "1,43 milliard km",
-                periode: "29,45 ans",
-                temperature: "-139 °C",
-                color: "#e6d9a3"
-            },
-            uranus: {
-                type: "Géante de glace",
-                diametre: "50 724 km",
-                distance: "2,87 milliards km",
-                periode: "84 ans",
-                temperature: "-197 °C",
-                color: "#99ccff"
-            },
-            neptune: {
-                type: "Géante de glace",
-                diametre: "49 244 km",
-                distance: "4,50 milliards km",
-                periode: "164,8 ans",
-                temperature: "-201 °C",
-                color: "#3333cc"
-            }
-        };
-
-        const facts = realFacts[planetKey];
+        // Les informations astronomiques reelles vivent dans planetData.js
+        const facts = p.data.facts;
         return {
             nom: p.data.nom,
             type: facts.type,
@@ -303,28 +234,27 @@ class App {
             texture: p.mesh.material.map // On transmet la texture 3D pour la mini-preview
         };
     }
-
     animate() {
         requestAnimationFrame(this.animate.bind(this));
 
         const speed = this.isPaused ? 0 : this.simulationSpeed;
 
-        // 1. Mettre à jour les planètes
+        // 1. Mettre Ã  jour les planÃ¨tes
         for (const planet of Object.values(this.planets)) {
             planet.update(speed, this.showOrbits);
         }
 
-        // 2. Mettre à jour le Starship
+        // 2. Mettre Ã  jour le Starship
         if (this.starship && this.starship.group.visible) {
             this.starship.update(speed);
         }
 
-        // 3. Mettre à jour les effets spéciaux
+        // 3. Mettre Ã  jour les effets spÃ©ciaux
         if (this.effectsManager) {
             this.effectsManager.update(speed, this.planets);
         }
 
-        // 4. Suivi de caméra intelligent (Pursuit / Focus camera)
+        // 4. Suivi de camÃ©ra intelligent (Pursuit / Focus camera)
         const camera = this.sceneManager.camera;
         const controls = this.sceneManager.controls;
 
@@ -332,19 +262,19 @@ class App {
             const planet = this.planets[this.focusedPlanetKey];
             if (planet) {
                 const planetPos = planet.group.position;
-                // Calculer la distance de focus selon le rayon de la planète
+                // Calculer la distance de focus selon le rayon de la planÃ¨te
                 const dist = this.focusedPlanetKey === 'soleil' ? 22 : planet.data.rayon * 4.5 + 4;
                 const offset = new THREE.Vector3(dist, dist * 0.4, dist);
                 const targetCamPos = planetPos.clone().add(offset);
 
-                // Lerp très fluide
+                // Lerp trÃ¨s fluide
                 camera.position.lerp(targetCamPos, 0.05);
                 controls.target.lerp(planetPos, 0.05);
             }
         } 
         else if (this.cameraFollowingStarship && this.starship && this.starship.group.visible) {
             const shipPos = this.starship.group.position;
-            // Positionner la caméra légèrement derrière la fusée
+            // Positionner la camÃ©ra lÃ©gÃ¨rement derriÃ¨re la fusÃ©e
             const backDir = new THREE.Vector3(0, 0.6, -2.5).applyQuaternion(this.starship.group.quaternion);
             const targetCamPos = shipPos.clone().add(backDir);
 
@@ -352,7 +282,7 @@ class App {
             controls.target.lerp(shipPos, 0.08);
         }
 
-        // 5. Mettre à jour la physique des contrôles
+        // 5. Mettre Ã  jour la physique des contrÃ´les
         this.sceneManager.update();
 
         // 6. Rendu final avec Post-processing (Bloom)
