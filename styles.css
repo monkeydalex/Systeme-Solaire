@@ -153,6 +153,11 @@ body {
     transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
 
+#audio-btn.active {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
 .dock-btn:hover,
 .dock-btn.active {
     background: rgba(110, 231, 255, 0.15);

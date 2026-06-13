@@ -11,6 +11,7 @@ import { UIManager } from './ui/UIManager.js';
 import { Labels } from './ui/Labels.js';
 import { planetData } from './data/planetData.js';
 import { applyScaleMode } from './core/ScaleModes.mjs';
+import { AudioManager } from './audio/AudioManager.mjs';
 
 class App {
     constructor() {
@@ -80,6 +81,9 @@ class App {
         const starBtn = document.querySelector('.effect-btn[data-effect="stars"]');
         if (starBtn) starBtn.classList.add('active');
 
+        // Audio procédural (coupé tant que l'utilisateur ne l'active pas)
+        this.audio = new AudioManager();
+
         // 6. Configurer l'UI avec ses callbacks
         this.uiManager = new UIManager({
             onSpeedChange: (val) => {
@@ -129,6 +133,17 @@ class App {
             onConstellationFilter: (zodiacOnly) => {
                 this.effectsManager.setZodiacOnly(zodiacOnly);
             },
+            onAudioToggle: async (active) => {
+                if (active) {
+                    await this.audio.enable();
+                    this.audio.setMuted(false);
+                } else {
+                    this.audio.setMuted(true);
+                }
+            },
+            onVolumeChange: (val) => {
+                this.audio.setVolume(val);
+            },
             onPlanetFocus: (planetKey) => {
                 this.focusBody(planetKey, false);
             },
@@ -141,6 +156,7 @@ class App {
             },
             onStarshipTarget: (planetKey) => {
                 this.starship.travelTo(planetKey);
+                if (this.audio) this.audio.startEngine();
             },
             onStarshipSpeed: (val) => {
                 this.starship.speedMultiplier = val;
@@ -164,6 +180,14 @@ class App {
         this.effectsManager.onConstellationClick = (key) => {
             this.uiManager.showConstellationDetail(key);
         };
+
+        // Petit clic d'UI sur les boutons du popover
+        const uiClick = (e) => {
+            if (this.audio && this.audio.isEnabled() && e.target.closest('button')) {
+                this.audio.playClick();
+            }
+        };
+        document.getElementById('effects-popover').addEventListener('click', uiClick);
 
         // 6b. Visite guidée cinématique de Mercure à Neptune
         this.tour = new GuidedTour(
@@ -214,6 +238,8 @@ class App {
         if (!fromTour && this.tour && this.tour.active) {
             this.tour.stop();
         }
+
+        if (this.audio) { this.audio.playSelect(); this.audio.playWhoosh(); }
 
         this.focusedPlanetKey = key;
         this.cameraFollowingStarship = false;
@@ -352,7 +378,12 @@ class App {
         // 2. Mettre à jour le Starship et son HUD de mission
         if (this.starship && this.starship.group.visible) {
             this.starship.update(speed);
-            this.uiManager.updateStarshipStatus(this.starship.getStatus());
+            const status = this.starship.getStatus();
+            this.uiManager.updateStarshipStatus(status);
+            if (this.audio) {
+                if (status.state === 'traveling') this.audio.startEngine();
+                else this.audio.stopEngine();
+            }
         }
 
         // 3. Mettre à jour les effets spéciaux

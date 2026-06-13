@@ -127,6 +127,14 @@ export class UIManager {
             if (this.callbacks.onCameraReset) this.callbacks.onCameraReset();
         });
 
+        const audioBtn = document.getElementById('audio-btn');
+        audioBtn.addEventListener('click', () => {
+            const active = audioBtn.classList.toggle('active');
+            audioBtn.textContent = active ? '🔊' : '🔇';
+            audioBtn.title = active ? 'Couper le son' : 'Activer le son';
+            this.callbacks.onAudioToggle(active);
+        });
+
         // Raccourcis clavier : Espace = pause, Échap = fermer fiche/popover
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
@@ -172,6 +180,12 @@ export class UIManager {
 
         document.getElementById('zodiac-only').addEventListener('change', (e) => {
             if (this.callbacks.onConstellationFilter) this.callbacks.onConstellationFilter(e.target.checked);
+        });
+
+        document.getElementById('audio-volume').addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            document.getElementById('audio-volume-value').textContent = val;
+            if (this.callbacks.onVolumeChange) this.callbacks.onVolumeChange(val / 100);
         });
 
         document.getElementById('show-orbits').addEventListener('change', (e) => {
