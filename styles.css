@@ -619,16 +619,63 @@ body {
     position: fixed;
     inset: 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 6px;
     background: #04060f;
     z-index: 100;
     font-size: 1rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
     color: var(--text-dim);
-    animation: loading-pulse 1.6s ease-in-out infinite;
 }
+
+.loader-system { position: relative; width: 90px; height: 90px; margin: 0 auto 16px; }
+.loader-sun {
+    position: absolute; top: 50%; left: 50%; width: 22px; height: 22px;
+    margin: -11px 0 0 -11px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, #fff3b0, #ffae00 60%, #ff6a00);
+    box-shadow: 0 0 22px rgba(255, 170, 0, 0.8);
+    animation: loader-pulse 1.8s ease-in-out infinite;
+}
+.loader-orbit {
+    position: absolute; top: 50%; left: 50%; width: 90px; height: 90px;
+    margin: -45px 0 0 -45px; border: 1px solid rgba(140, 165, 255, 0.4);
+    border-radius: 50%; animation: loader-spin 2.4s linear infinite;
+}
+.loader-orbit::after {
+    content: ''; position: absolute; top: -4px; left: 50%; width: 8px; height: 8px;
+    margin-left: -4px; border-radius: 50%; background: #8fd8ff;
+    box-shadow: 0 0 10px #8fd8ff;
+}
+.loader-orbit-2 { width: 58px; height: 58px; margin: -29px 0 0 -29px; animation-duration: 1.5s; }
+.loader-orbit-2::after { background: #ffd27a; box-shadow: 0 0 10px #ffd27a; }
+@keyframes loader-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+@keyframes loader-spin { to { transform: rotate(360deg); } }
+
+#intro-skip {
+    position: fixed; bottom: 96px; right: 22px; z-index: 30;
+    font-family: var(--font-main); font-size: 0.8rem; color: var(--text);
+    padding: 8px 16px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--glass-border); background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+}
+#intro-skip:hover { border-color: var(--accent); color: var(--accent); }
+
+#tip-toast {
+    position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); z-index: 30;
+    display: flex; align-items: center; gap: 12px;
+    font-size: 0.82rem; color: var(--text);
+    padding: 10px 14px; border-radius: 12px;
+    border: 1px solid var(--glass-border); background: var(--glass-bg);
+    backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+#tip-toast button {
+    border: none; background: transparent; color: var(--text-dim);
+    cursor: pointer; font-size: 0.9rem;
+}
+#tip-toast button:hover { color: var(--accent); }
 
 @keyframes loading-pulse {
     0%, 100% { color: var(--text-dim); }

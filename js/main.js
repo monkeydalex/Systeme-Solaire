@@ -14,6 +14,7 @@ import { applyScaleMode } from './core/ScaleModes.mjs';
 import { AudioManager } from './audio/AudioManager.mjs';
 import { Interactions } from './core/Interactions.mjs';
 import { formatTooltip } from './ui/tooltip.mjs';
+import { Onboarding, shouldPlayIntro } from './ui/Onboarding.mjs';
 
 class App {
     constructor() {
@@ -230,9 +231,19 @@ class App {
             this.postProcessing.resize(window.innerWidth, window.innerHeight);
         });
 
-        // Masquer le message de chargement de l'HTML d'origine
-        const loader = document.getElementById('loading-message');
-        if (loader) loader.style.display = 'none';
+        // Accueil : fondu du loader, vol d'intro (1re visite) puis astuce
+        this.onboarding = new Onboarding({
+            camera,
+            controls: this.sceneManager.controls,
+            onAudioWhoosh: () => { if (this.audio) this.audio.playWhoosh(); }
+        });
+        this.onboarding.fadeOutLoader();
+        const showTip = () => this.onboarding.showTip('Survolez ou cliquez une planète pour l’explorer.');
+        if (shouldPlayIntro(window.localStorage)) {
+            this.onboarding.playIntro(showTip);
+        } else {
+            showTip();
+        }
 
         // 8. Démarrer la boucle de rendu
         this.animate();
