@@ -98,12 +98,16 @@
             <button id="pause-btn" class="dock-btn" title="Pause / Lecture (Espace)">❚❚</button>
             <input type="range" id="speed-slider" min="0" max="100" value="50" title="Vitesse de simulation">
             <span id="speed-value" title="Vitesse de simulation">×1.0</span>
+            <span class="speed-markers" aria-hidden="true"><i>lent</i><i>×1</i><i>rapide</i></span>
             <button id="tour-btn">🚀 Visite guidée</button>
             <button id="effects-btn" class="dock-btn" title="Effets &amp; extras">✦</button>
             <button id="audio-btn" class="dock-btn" title="Activer le son">🔇</button>
             <button id="reset-camera-btn" class="dock-btn" title="Vue d'ensemble">⌖</button>
         </div>
     </nav>
+
+    <!-- Infobulle au survol -->
+    <div id="hover-tooltip"></div>
 
     <!-- Aide navigation -->
     <div id="help-hint">clic gauche : orbite · molette : zoom · clic droit : pan</div>

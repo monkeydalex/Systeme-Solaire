@@ -13,6 +13,7 @@ import { planetData } from './data/planetData.js';
 import { applyScaleMode } from './core/ScaleModes.mjs';
 import { AudioManager } from './audio/AudioManager.mjs';
 import { Interactions } from './core/Interactions.mjs';
+import { formatTooltip } from './ui/tooltip.mjs';
 
 class App {
     constructor() {
@@ -207,10 +208,20 @@ class App {
             camera,
             bodies: { ...this.planets, ...this.moons },
             onFocus: (key) => this.focusBody(key),
-            onHover: (key) => {
+            onHover: (key, x, y) => {
                 if (this.labels) this.labels.highlight(key);
                 if (key && key !== this._lastHoverKey && this.audio) this.audio.playHover();
                 this._lastHoverKey = key;
+                const tip = document.getElementById('hover-tooltip');
+                const data = key ? (this.planets[key] || this.moons[key]).data : null;
+                if (data) {
+                    tip.textContent = formatTooltip(data);
+                    tip.style.left = x + 'px';
+                    tip.style.top = y + 'px';
+                    tip.classList.add('visible');
+                } else {
+                    tip.classList.remove('visible');
+                }
             }
         });
 

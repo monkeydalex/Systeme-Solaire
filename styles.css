@@ -557,6 +557,39 @@ body {
     background: rgba(10, 14, 30, 0.8);
 }
 
+#hover-tooltip {
+    position: fixed;
+    pointer-events: none;
+    z-index: 11;
+    padding: 4px 10px;
+    font-size: 0.74rem;
+    letter-spacing: 0.04em;
+    color: rgba(220, 230, 255, 0.95);
+    background: rgba(10, 14, 30, 0.78);
+    border: 1px solid rgba(140, 165, 255, 0.3);
+    border-radius: 8px;
+    transform: translate(12px, 12px);
+    opacity: 0;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+}
+#hover-tooltip.visible { opacity: 1; }
+
+.speed-markers {
+    display: none;
+}
+@media (min-width: 720px) {
+    .speed-markers {
+        display: flex;
+        gap: 6px;
+        font-size: 0.58rem;
+        letter-spacing: 0.04em;
+        color: var(--text-dim);
+        text-transform: uppercase;
+    }
+    .speed-markers i { font-style: normal; opacity: 0.7; }
+}
+
 .constellation-label {
     font-family: var(--font-main);
     font-size: 10px;
