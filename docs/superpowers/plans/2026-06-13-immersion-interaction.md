@@ -76,7 +76,7 @@ function makeFakeContext() {
         createOscillator() {
             const o = make('osc'); o.frequency = param(); o.detune = param();
             o.type = 'sine'; o.started = false;
-            o.start() { o.started = true; }; o.stop() {};
+            o.start = () => { o.started = true; }; o.stop = () => {};
             return o;
         },
         createBiquadFilter() { const f = make('filter'); f.frequency = param(); f.Q = param(); f.type = 'lowpass'; return f; },
