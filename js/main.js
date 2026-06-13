@@ -12,6 +12,7 @@ import { Labels } from './ui/Labels.js';
 import { planetData } from './data/planetData.js';
 import { applyScaleMode } from './core/ScaleModes.mjs';
 import { AudioManager } from './audio/AudioManager.mjs';
+import { Interactions } from './core/Interactions.mjs';
 
 class App {
     constructor() {
@@ -198,8 +199,17 @@ class App {
             }
         );
 
-        // 7. Raycasting pour clics sur la scène
-        this.setupRaycasting();
+        // 7. Survol + clic → focus, via le module Interactions
+        this.interactions = new Interactions({
+            camera,
+            bodies: { ...this.planets, ...this.moons },
+            onFocus: (key) => this.focusBody(key),
+            onHover: (key) => {
+                if (this.labels) this.labels.highlight(key);
+                if (key && key !== this._lastHoverKey && this.audio) this.audio.playHover();
+                this._lastHoverKey = key;
+            }
+        });
 
         // Redimensionner le post-processing avec la fenêtre
         window.addEventListener('resize', () => {
@@ -230,6 +240,8 @@ class App {
                 }
             }
         }
+
+        if (this.interactions) this.interactions.resetBaseScales();
     }
 
     // Focalise la caméra sur une planète ou une lune, et ouvre sa fiche
@@ -254,37 +266,6 @@ class App {
         if (openPanel && this.uiManager) {
             this.uiManager.showDetailPanel(key);
         }
-    }
-
-    setupRaycasting() {
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-
-        window.addEventListener('click', (event) => {
-            // Empêcher le clic de se propager si on clique sur l'UI
-            if (event.target.tagName !== 'CANVAS') return;
-
-            // Calculer la position normalisée de la souris
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-            raycaster.setFromCamera(mouse, this.sceneManager.camera);
-
-            // Intersection avec les sphères des planètes et des lunes
-            const bodies = { ...this.planets, ...this.moons };
-            const meshes = Object.values(bodies).map(b => b.mesh);
-            const intersects = raycaster.intersectObjects(meshes);
-
-            if (intersects.length > 0) {
-                const clickedMesh = intersects[0].object;
-                const clickedKey = Object.keys(bodies).find(k => bodies[k].mesh === clickedMesh);
-
-                // showDetailPanel surligne la vignette correspondante du dock
-                if (clickedKey) {
-                    this.focusBody(clickedKey);
-                }
-            }
-        });
     }
 
     resetSimulation() {
@@ -390,6 +371,9 @@ class App {
         if (this.effectsManager) {
             this.effectsManager.update(speed, this.planets);
         }
+
+        // 3b. Survol : pulsation douce du corps survolé
+        if (this.interactions) this.interactions.update();
 
         // 4. Suivi de caméra intelligent (Pursuit / Focus camera)
         const camera = this.sceneManager.camera;

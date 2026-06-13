@@ -26,11 +26,19 @@ export class Labels {
             labelObj.position.set(0, planet.data.rayon + 1.1, 0);
             planet.group.add(labelObj);
             this.objects.push(labelObj);
+            (this.labelDivs || (this.labelDivs = {}))[key] = div;
         }
 
         window.addEventListener('resize', () => {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
+    }
+
+    highlight(key) {
+        if (!this.labelDivs) return;
+        for (const [k, div] of Object.entries(this.labelDivs)) {
+            div.classList.toggle('hovered', k === key);
+        }
     }
 
     setVisible(visible) {

@@ -550,7 +550,8 @@ body {
     transition: color 0.2s, border-color 0.2s, background 0.2s;
 }
 
-.planet-label:hover {
+.planet-label:hover,
+.planet-label.hovered {
     color: var(--accent);
     border-color: var(--accent);
     background: rgba(10, 14, 30, 0.8);
