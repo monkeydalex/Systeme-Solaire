@@ -158,6 +158,7 @@ class App {
                 this.starship.particlesGroup.visible = active;
                 if (!active) {
                     this.cameraFollowingStarship = false;
+                    if (this.audio) this.audio.stopEngine();
                 }
             },
             onStarshipTarget: (planetKey) => {
@@ -296,6 +297,7 @@ class App {
 
     resetSimulation() {
         if (this.tour && this.tour.active) this.tour.stop();
+        if (this.audio) this.audio.stopEngine();
 
         this.simulationSpeed = 1.0;
         this.isPaused = false;

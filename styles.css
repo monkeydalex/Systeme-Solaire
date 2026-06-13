@@ -677,10 +677,6 @@ body {
 }
 #tip-toast button:hover { color: var(--accent); }
 
-@keyframes loading-pulse {
-    0%, 100% { color: var(--text-dim); }
-    50% { color: var(--accent); }
-}
 
 /* ============ RESPONSIVE ============ */
 
