@@ -48,6 +48,41 @@ export class Moon {
         this.planet.group.add(this.orbitMesh);
     }
 
+    rebuildOrbit() {
+        if (this.orbitMesh) {
+            this.planet.group.remove(this.orbitMesh);
+            this.orbitMesh.geometry.dispose();
+            this.orbitMesh.material.dispose();
+            this.orbitMesh = null;
+        }
+
+        const points = [];
+        for (let i = 0; i <= 64; i++) {
+            const theta = (i / 64) * Math.PI * 2;
+            points.push(new THREE.Vector3(
+                Math.cos(theta) * this.data.distance, 0, Math.sin(theta) * this.data.distance
+            ));
+        }
+        const orbitGeometry = new THREE.BufferGeometry().setFromPoints(points);
+        const orbitMaterial = new THREE.LineBasicMaterial({
+            color: 0x7788bb,
+            transparent: true,
+            opacity: 0.35
+        });
+        this.orbitMesh = new THREE.Line(orbitGeometry, orbitMaterial);
+        this.planet.group.add(this.orbitMesh);
+    }
+
+    applyScaleData(data) {
+        this.data = {
+            ...this.data,
+            distance: data.distance,
+            vitesseOrbite: data.vitesseOrbite
+        };
+        this.updatePosition();
+        this.rebuildOrbit();
+    }
+
     createTexture() {
         const size = 256;
         const canvas = document.createElement('canvas');

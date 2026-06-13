@@ -226,6 +226,29 @@ export class Planet {
         this.scene.add(this.orbitMesh);
     }
 
+    rebuildOrbit() {
+        if (this.orbitMesh) {
+            this.scene.remove(this.orbitMesh);
+            this.orbitMesh.geometry.dispose();
+            this.orbitMesh.material.dispose();
+            this.orbitMesh = null;
+        }
+
+        if (this.key !== 'soleil') {
+            this.createOrbit();
+        }
+    }
+
+    applyScaleData(data) {
+        this.data = {
+            ...this.data,
+            distance: data.distance,
+            vitesseOrbite: data.vitesseOrbite
+        };
+        this.updatePosition();
+        this.rebuildOrbit();
+    }
+
     updatePosition() {
         if (this.key !== 'soleil') {
             this.group.position.x = Math.cos(this.angle) * this.data.distance;

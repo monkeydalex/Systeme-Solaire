@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { planetData } from '../data/planetData.js';
+import { SCALE_MODE_INFO } from '../core/ScaleModes.mjs';
+import { CINEMATIC_CONSTELLATIONS } from '../data/constellations.mjs';
 
 // Interface « Dock cinéma » : dock bas (vignettes + contrôles),
 // fiche latérale droite, popover effets & extras.
@@ -27,6 +29,12 @@ export class UIManager {
                     this.bodyIndex[moon.key] = { data: moon, parentKey: key };
                 }
             }
+        }
+
+        // Index des constellations { clé -> données }
+        this.constellationIndex = {};
+        for (const cst of CINEMATIC_CONSTELLATIONS) {
+            this.constellationIndex[cst.key] = cst;
         }
 
         this.init();
@@ -141,6 +149,17 @@ export class UIManager {
 
     // --- Popover effets, affichage, simulation ---
     setupEffectsPopover() {
+        // Onglets : un seul panneau visible à la fois
+        const tabs = document.querySelectorAll('.popover-tab');
+        const panels = document.querySelectorAll('.popover-panel');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const target = tab.getAttribute('data-tab');
+                tabs.forEach(t => t.classList.toggle('active', t === tab));
+                panels.forEach(p => p.classList.toggle('active', p.getAttribute('data-panel') === target));
+            });
+        });
+
         document.querySelectorAll('.effect-btn').forEach(button => {
             button.addEventListener('click', () => {
                 button.classList.toggle('active');
@@ -149,6 +168,10 @@ export class UIManager {
                     button.classList.contains('active')
                 );
             });
+        });
+
+        document.getElementById('zodiac-only').addEventListener('change', (e) => {
+            if (this.callbacks.onConstellationFilter) this.callbacks.onConstellationFilter(e.target.checked);
         });
 
         document.getElementById('show-orbits').addEventListener('change', (e) => {
@@ -163,6 +186,21 @@ export class UIManager {
             const val = parseInt(e.target.value, 10);
             document.getElementById('orbit-opacity-value').textContent = val;
             if (this.callbacks.onOrbitOpacity) this.callbacks.onOrbitOpacity(val / 100);
+        });
+
+        const scaleMode = document.getElementById('scale-mode');
+        const scaleDescription = document.getElementById('scale-mode-description');
+        for (const [key, info] of Object.entries(SCALE_MODE_INFO)) {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = info.label;
+            scaleMode.appendChild(option);
+        }
+        scaleDescription.textContent = SCALE_MODE_INFO.pedagogique.description;
+        scaleMode.addEventListener('change', (e) => {
+            const info = SCALE_MODE_INFO[e.target.value] || SCALE_MODE_INFO.pedagogique;
+            scaleDescription.textContent = info.description;
+            if (this.callbacks.onScaleModeChange) this.callbacks.onScaleModeChange(e.target.value);
         });
 
         document.getElementById('reset-btn').addEventListener('click', () => {
@@ -276,12 +314,17 @@ export class UIManager {
 
         document.getElementById('detail-tag').textContent = info.type;
         document.getElementById('detail-name').textContent = info.nom;
-        document.getElementById('detail-type').textContent = info.type;
-        document.getElementById('detail-diameter').textContent = info.diametre;
-        document.getElementById('detail-distance').textContent = info.distance;
-        document.getElementById('detail-period').textContent = info.periode;
-        document.getElementById('detail-temperature').textContent = info.temperature;
         document.getElementById('detail-description').textContent = info.description || '';
+        this.renderDetailTable([
+            { label: 'Type', value: info.type },
+            { label: 'Diamètre', value: info.diametre },
+            { label: 'Distance', value: info.distance },
+            { label: 'Période orbitale', value: info.periode },
+            { label: 'Température', value: info.temperature }
+        ]);
+
+        // Aperçu 3D rotatif : pertinent pour un corps (masqué pour une constellation)
+        document.querySelector('.detail-rotate').style.display = '';
 
         // Chips : lunes de la planète, ou planète parente pour une lune
         const moonsDiv = document.getElementById('detail-moons');
@@ -318,6 +361,118 @@ export class UIManager {
         this.initPreviewScene(key, info.color, info.texture);
     }
 
+    // Remplit le tableau de la fiche (lignes { label, value })
+    renderDetailTable(rows) {
+        const tbody = document.getElementById('detail-table-body');
+        tbody.innerHTML = '';
+        for (const row of rows) {
+            if (row.value == null || row.value === '') continue;
+            const tr = document.createElement('tr');
+            const td1 = document.createElement('td');
+            td1.textContent = row.label;
+            const td2 = document.createElement('td');
+            td2.textContent = row.value;
+            tr.append(td1, td2);
+            tbody.appendChild(tr);
+        }
+    }
+
+    // --- Fiche détaillée d'une constellation ---
+    showConstellationDetail(key) {
+        const cst = this.constellationIndex[key];
+        if (!cst) return;
+
+        this.currentBodyKey = key;
+        this.selectDockPlanet(null);
+
+        document.getElementById('detail-tag').textContent = cst.zodiaque ? 'Zodiaque' : 'Constellation';
+        document.getElementById('detail-name').textContent = cst.nom;
+        document.getElementById('detail-description').textContent = cst.description || '';
+
+        const rows = [
+            { label: 'Type', value: cst.zodiaque ? 'Signe du zodiaque' : 'Constellation' },
+            { label: 'Étoile principale', value: cst.etoilePrincipale },
+            { label: "Nombre d'étoiles", value: String(cst.stars.length) }
+        ];
+        if (cst.zodiaque) rows.push({ label: 'Dates', value: cst.dates });
+        this.renderDetailTable(rows);
+
+        // Pas d'aperçu 3D rotatif pour une constellation
+        document.querySelector('.detail-rotate').style.display = 'none';
+        document.getElementById('detail-moons').innerHTML = '';
+
+        document.getElementById('detail-panel').classList.add('open');
+
+        this.drawConstellationPreview(cst);
+    }
+
+    // Aperçu 2D : la constellation dessinée comme une carte du ciel
+    drawConstellationPreview(cst) {
+        const container = document.getElementById('planet-preview-container');
+        if (!container) return;
+
+        if (this.previewAnimationId) {
+            cancelAnimationFrame(this.previewAnimationId);
+            this.previewAnimationId = null;
+        }
+
+        const width = container.clientWidth || 290;
+        const height = container.clientHeight || 190;
+
+        // Détacher l'aperçu WebGL (conservé pour réutilisation) au profit d'un canvas 2D
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        while (container.firstChild) container.removeChild(container.firstChild);
+        container.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#070a18';
+        ctx.fillRect(0, 0, width, height);
+
+        // Projeter les positions (x, y) dans le canvas, axe Y inversé, avec marge
+        const xs = cst.stars.map(s => s.position[0]);
+        const ys = cst.stars.map(s => s.position[1]);
+        const minX = Math.min(...xs), maxX = Math.max(...xs);
+        const minY = Math.min(...ys), maxY = Math.max(...ys);
+        const pad = 26;
+        const spanX = (maxX - minX) || 1;
+        const spanY = (maxY - minY) || 1;
+        const scale = Math.min((width - pad * 2) / spanX, (height - pad * 2) / spanY);
+        const offX = (width - spanX * scale) / 2;
+        const offY = (height - spanY * scale) / 2;
+        const project = (p) => ({
+            x: offX + (p[0] - minX) * scale,
+            y: height - (offY + (p[1] - minY) * scale)
+        });
+
+        // Tracés reliant les étoiles
+        ctx.strokeStyle = cst.color;
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (const [from, to] of cst.lines) {
+            const a = project(cst.stars[from].position);
+            const b = project(cst.stars[to].position);
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+        }
+        ctx.stroke();
+
+        // Étoiles, avec un léger halo
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = cst.color;
+        ctx.shadowColor = cst.color;
+        for (const star of cst.stars) {
+            const p = project(star.position);
+            ctx.shadowBlur = 8 * star.size;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 1.6 * star.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+    }
+
     // --- Mini scène d'aperçu 3D ---
     initPreviewScene(bodyKey, colorHex, originalTexture) {
         const container = document.getElementById('planet-preview-container');
@@ -328,9 +483,12 @@ export class UIManager {
         }
 
         if (!this.previewRenderer) {
-            while (container.firstChild) container.removeChild(container.firstChild);
             this.previewRenderer = new THREE.WebGLRenderer({ antialias: true });
             this.previewRenderer.setClearColor(0x070a18, 1);
+        }
+        // (Ré)attacher le canvas WebGL — il a pu être détaché par un aperçu 2D
+        if (this.previewRenderer.domElement.parentNode !== container) {
+            while (container.firstChild) container.removeChild(container.firstChild);
             container.appendChild(this.previewRenderer.domElement);
         }
 

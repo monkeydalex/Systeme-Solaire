@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { createNoise2D } from 'simplex-noise';
+import { CINEMATIC_CONSTELLATIONS } from '../data/constellations.mjs';
 
 const noise2D = createNoise2D();
 
@@ -12,6 +14,10 @@ export class SpecialEffectsManager {
         this.nebulas = [];
         this.meteorsActive = false;
         this.meteors = [];
+        this.constellations = null;
+        this.constellationMaterials = [];
+        this.zodiacOnly = false;
+        this.onConstellationClick = null;
         this.asteroidBelt = null;
         this.asteroidData = null;
         this.comet = null;
@@ -113,6 +119,131 @@ export class SpecialEffectsManager {
             this.stars.geometry.dispose();
             this.stars.material.dispose();
             this.stars = null;
+        }
+    }
+
+    // --- Constellations cinématiques (étoiles nommées + tracés + labels) ---
+    toggleConstellations(active) {
+        if (active && !this.constellations) {
+            const group = new THREE.Group();
+            this.constellationMaterials = [];
+
+            const list = this.zodiacOnly
+                ? CINEMATIC_CONSTELLATIONS.filter(c => c.zodiaque)
+                : CINEMATIC_CONSTELLATIONS;
+
+            for (const cst of list) {
+                const color = new THREE.Color(cst.color);
+
+                // Étoiles : points lumineux doux, scintillement léger
+                const positions = new Float32Array(cst.stars.length * 3);
+                const sizes = new Float32Array(cst.stars.length);
+                const phases = new Float32Array(cst.stars.length);
+                cst.stars.forEach((star, i) => {
+                    positions[i * 3] = star.position[0];
+                    positions[i * 3 + 1] = star.position[1];
+                    positions[i * 3 + 2] = star.position[2];
+                    sizes[i] = star.size;
+                    phases[i] = i * 1.7;
+                });
+
+                const starGeo = new THREE.BufferGeometry();
+                starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                starGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+                starGeo.setAttribute('phase', new THREE.BufferAttribute(phases, 1));
+
+                const starMat = new THREE.ShaderMaterial({
+                    uniforms: {
+                        uTime: { value: 0 },
+                        uColor: { value: color }
+                    },
+                    vertexShader: `
+                        uniform float uTime;
+                        attribute float size;
+                        attribute float phase;
+                        varying float vAlpha;
+
+                        void main() {
+                            vAlpha = 0.75 + 0.25 * sin(uTime * 1.5 + phase);
+                            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                            gl_PointSize = size * 6.0 * (300.0 / -mvPosition.z);
+                            gl_Position = projectionMatrix * mvPosition;
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform vec3 uColor;
+                        varying float vAlpha;
+
+                        void main() {
+                            float dist = length(gl_PointCoord - vec2(0.5));
+                            if (dist > 0.5) discard;
+                            float core = smoothstep(0.5, 0.0, dist);
+                            gl_FragColor = vec4(uColor, core * vAlpha);
+                        }
+                    `,
+                    transparent: true,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+
+                group.add(new THREE.Points(starGeo, starMat));
+                this.constellationMaterials.push(starMat);
+
+                // Tracés reliant les étoiles
+                const linePos = [];
+                for (const [from, to] of cst.lines) {
+                    linePos.push(...cst.stars[from].position, ...cst.stars[to].position);
+                }
+                const lineGeo = new THREE.BufferGeometry();
+                lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3));
+                const lineMat = new THREE.LineBasicMaterial({
+                    color,
+                    transparent: true,
+                    opacity: 0.35,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+                group.add(new THREE.LineSegments(lineGeo, lineMat));
+
+                // Label CSS2D au barycentre des étoiles + décalage défini par la donnée
+                const centroid = new THREE.Vector3();
+                for (const star of cst.stars) centroid.add(new THREE.Vector3(...star.position));
+                centroid.multiplyScalar(1 / cst.stars.length).add(new THREE.Vector3(...cst.labelOffset));
+
+                const div = document.createElement('div');
+                div.className = 'constellation-label';
+                div.textContent = cst.nom;
+                div.style.pointerEvents = 'auto';
+                div.style.cursor = 'pointer';
+                div.addEventListener('click', () => {
+                    if (this.onConstellationClick) this.onConstellationClick(cst.key);
+                });
+                const label = new CSS2DObject(div);
+                label.position.copy(centroid);
+                group.add(label);
+            }
+
+            this.constellations = group;
+            this.scene.add(group);
+        } else if (!active && this.constellations) {
+            this.constellations.traverse(child => {
+                if (child.isCSS2DObject && child.element) child.element.remove();
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            });
+            this.scene.remove(this.constellations);
+            this.constellations = null;
+            this.constellationMaterials = [];
+        }
+    }
+
+    // Restreint l'affichage aux 12 signes du zodiaque (reconstruit si actif)
+    setZodiacOnly(flag) {
+        if (this.zodiacOnly === flag) return;
+        this.zodiacOnly = flag;
+        if (this.constellations) {
+            this.toggleConstellations(false);
+            this.toggleConstellations(true);
         }
     }
 
@@ -462,6 +593,11 @@ export class SpecialEffectsManager {
         // 1. Étoiles
         if (this.stars && this.stars.material.uniforms) {
             this.stars.material.uniforms.uTime.value = time;
+        }
+
+        // 1b. Constellations : scintillement léger des étoiles
+        for (const mat of this.constellationMaterials) {
+            mat.uniforms.uTime.value = time;
         }
 
         // 2. Nébuleuses : dérive très lente

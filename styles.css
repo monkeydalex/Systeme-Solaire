@@ -236,6 +236,46 @@ body {
 
 #effects-popover h3:first-child { margin-top: 0; }
 
+.popover-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 14px;
+    padding: 3px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.popover-tab {
+    flex: 1;
+    font-family: var(--font-main);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    padding: 6px 4px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.popover-tab:hover { color: var(--text); }
+
+.popover-tab.active {
+    background: rgba(110, 231, 255, 0.16);
+    color: var(--accent);
+}
+
+.popover-panel { display: none; }
+.popover-panel.active { display: block; }
+
+.popover-subcheck {
+    margin-top: 10px;
+    font-size: 0.74rem;
+    color: var(--text-dim);
+}
+
+.popover-footer-btn { margin-top: 14px; }
+
 .popover-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -327,6 +367,13 @@ body {
 }
 
 #starship-speed-value { color: var(--accent); font-weight: 600; }
+
+#scale-mode-description {
+    font-size: 0.68rem;
+    line-height: 1.35;
+    color: rgba(223, 230, 255, 0.62);
+    margin: -2px 0 8px;
+}
 
 #starship-status { margin: 4px 0 8px; }
 
@@ -502,6 +549,18 @@ body {
     color: var(--accent);
     border-color: var(--accent);
     background: rgba(10, 14, 30, 0.8);
+}
+
+.constellation-label {
+    font-family: var(--font-main);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(190, 210, 255, 0.7);
+    text-shadow: 0 0 8px rgba(120, 160, 255, 0.6);
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
 }
 
 /* ============ AIDE & CHARGEMENT ============ */

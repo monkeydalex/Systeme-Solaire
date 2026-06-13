@@ -10,6 +10,7 @@ import { PostProcessing } from './effects/PostProcessing.js';
 import { UIManager } from './ui/UIManager.js';
 import { Labels } from './ui/Labels.js';
 import { planetData } from './data/planetData.js';
+import { applyScaleMode } from './core/ScaleModes.mjs';
 
 class App {
     constructor() {
@@ -30,6 +31,8 @@ class App {
         this.showOrbits = true;
         this.focusedPlanetKey = null;
         this.cameraFollowingStarship = false;
+        this.scaleMode = 'pedagogique';
+        this.scaledPlanetData = applyScaleMode(planetData, this.scaleMode);
 
         this.init();
     }
@@ -48,10 +51,10 @@ class App {
         this.postProcessing = new PostProcessing(renderer, scene, camera);
 
         // 3. Créer les planètes puis leurs lunes
-        for (const [key, data] of Object.entries(planetData)) {
+        for (const [key, data] of Object.entries(this.scaledPlanetData)) {
             this.planets[key] = new Planet(key, data, scene);
         }
-        for (const [key, data] of Object.entries(planetData)) {
+        for (const [key, data] of Object.entries(this.scaledPlanetData)) {
             if (!data.moons) continue;
             for (const moonData of data.moons) {
                 this.moons[moonData.key] = new Moon(moonData.key, moonData, this.planets[key]);
@@ -111,13 +114,20 @@ class App {
                     if (moon.orbitMesh) moon.orbitMesh.material.opacity = val * 0.7;
                 }
             },
+            onScaleModeChange: (modeKey) => {
+                this.applyScaleMode(modeKey);
+            },
             onEffectToggle: (effect, active) => {
                 if (effect === 'stars') this.effectsManager.toggleStars(active);
+                else if (effect === 'constellations') this.effectsManager.toggleConstellations(active);
                 else if (effect === 'nebula') this.effectsManager.toggleNebula(active);
                 else if (effect === 'meteor') this.effectsManager.toggleMeteors(active);
                 else if (effect === 'asteroids') this.effectsManager.toggleAsteroids(active);
                 else if (effect === 'comet') this.effectsManager.toggleComet(active);
                 else if (effect === 'station') this.effectsManager.toggleSpaceStation(active);
+            },
+            onConstellationFilter: (zodiacOnly) => {
+                this.effectsManager.setZodiacOnly(zodiacOnly);
             },
             onPlanetFocus: (planetKey) => {
                 this.focusBody(planetKey, false);
@@ -150,6 +160,11 @@ class App {
             }
         });
 
+        // 6a. Clic sur un label de constellation → fiche détaillée
+        this.effectsManager.onConstellationClick = (key) => {
+            this.uiManager.showConstellationDetail(key);
+        };
+
         // 6b. Visite guidée cinématique de Mercure à Neptune
         this.tour = new GuidedTour(
             ['mercure', 'venus', 'terre', 'mars', 'jupiter', 'saturne', 'uranus', 'neptune'],
@@ -173,6 +188,24 @@ class App {
 
         // 8. Démarrer la boucle de rendu
         this.animate();
+    }
+
+    applyScaleMode(modeKey) {
+        this.scaleMode = modeKey;
+        this.scaledPlanetData = applyScaleMode(planetData, modeKey);
+
+        for (const [key, data] of Object.entries(this.scaledPlanetData)) {
+            if (this.planets[key]) {
+                this.planets[key].applyScaleData(data);
+            }
+
+            if (!data.moons) continue;
+            for (const moonData of data.moons) {
+                if (this.moons[moonData.key]) {
+                    this.moons[moonData.key].applyScaleData(moonData);
+                }
+            }
+        }
     }
 
     // Focalise la caméra sur une planète ou une lune, et ouvre sa fiche

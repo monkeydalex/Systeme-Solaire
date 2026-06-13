@@ -25,13 +25,7 @@
         <span id="detail-tag"></span>
         <h2 id="detail-name"></h2>
         <div id="planet-preview-container"></div>
-        <table class="detail-table">
-            <tr><td>Type</td><td id="detail-type"></td></tr>
-            <tr><td>Diamètre</td><td id="detail-diameter"></td></tr>
-            <tr><td>Distance</td><td id="detail-distance"></td></tr>
-            <tr><td>Période orbitale</td><td id="detail-period"></td></tr>
-            <tr><td>Température</td><td id="detail-temperature"></td></tr>
-        </table>
+        <table class="detail-table"><tbody id="detail-table-body"></tbody></table>
         <div id="detail-moons"></div>
         <p id="detail-description"></p>
         <label class="detail-rotate">
@@ -40,40 +34,57 @@
         </label>
     </aside>
 
-    <!-- Popover effets & extras -->
+    <!-- Popover effets & extras (onglets) -->
     <div id="effects-popover">
-        <h3>Effets</h3>
-        <div class="popover-grid">
-            <button class="effect-btn" data-effect="stars">✦ Étoiles</button>
-            <button class="effect-btn" data-effect="nebula">☁ Nébuleuse</button>
-            <button class="effect-btn" data-effect="meteor">☄ Météores</button>
-            <button class="effect-btn" data-effect="asteroids">◦ Astéroïdes</button>
-            <button class="effect-btn" data-effect="comet">⊃ Comète</button>
-            <button class="effect-btn" data-effect="station">🛰 Station</button>
+        <div class="popover-tabs">
+            <button class="popover-tab active" data-tab="effets">Effets</button>
+            <button class="popover-tab" data-tab="affichage">Affichage</button>
+            <button class="popover-tab" data-tab="starship">StarShip</button>
         </div>
-        <h3>Affichage</h3>
-        <label class="popover-check"><input type="checkbox" id="show-orbits" checked> Orbites</label>
-        <label class="popover-check"><input type="checkbox" id="show-labels" checked> Noms des planètes</label>
-        <label class="popover-label">Opacité des orbites <span id="orbit-opacity-value">50</span> %
-            <input type="range" id="orbit-opacity" min="0" max="100" value="50">
-        </label>
-        <h3>StarShip</h3>
-        <button id="toggle-starship" class="popover-btn">Activer StarShip</button>
-        <div id="starship-controls" style="display: none;">
-            <div id="starship-status">
-                <div id="starship-status-text"></div>
-                <div class="mission-progress"><div id="starship-progress"></div></div>
+
+        <section class="popover-panel active" data-panel="effets">
+            <div class="popover-grid">
+                <button class="effect-btn" data-effect="stars">✦ Étoiles</button>
+                <button class="effect-btn" data-effect="constellations">✶ Constellations</button>
+                <button class="effect-btn" data-effect="nebula">☁ Nébuleuse</button>
+                <button class="effect-btn" data-effect="meteor">☄ Météores</button>
+                <button class="effect-btn" data-effect="asteroids">◦ Astéroïdes</button>
+                <button class="effect-btn" data-effect="comet">⊃ Comète</button>
+                <button class="effect-btn" data-effect="station">🛰 Station</button>
             </div>
-            <label class="popover-label">Destination
-                <select id="starship-target"></select>
+            <label class="popover-check popover-subcheck"><input type="checkbox" id="zodiac-only"> Constellations : zodiaque uniquement</label>
+        </section>
+
+        <section class="popover-panel" data-panel="affichage">
+            <label class="popover-check"><input type="checkbox" id="show-orbits" checked> Orbites</label>
+            <label class="popover-check"><input type="checkbox" id="show-labels" checked> Noms des planètes</label>
+            <label class="popover-label">Opacité des orbites <span id="orbit-opacity-value">50</span> %
+                <input type="range" id="orbit-opacity" min="0" max="100" value="50">
             </label>
-            <label class="popover-label">Propulsion <span id="starship-speed-value">1.0</span>×
-                <input type="range" id="starship-speed" min="0.5" max="4.0" step="0.5" value="1.0">
+            <label class="popover-label">Échelle
+                <select id="scale-mode"></select>
             </label>
-            <button id="follow-starship" class="popover-btn">Suivre StarShip</button>
-        </div>
-        <h3>Simulation</h3>
-        <button id="reset-btn" class="popover-btn">Réinitialiser la simulation</button>
+            <p id="scale-mode-description"></p>
+        </section>
+
+        <section class="popover-panel" data-panel="starship">
+            <button id="toggle-starship" class="popover-btn">Activer StarShip</button>
+            <div id="starship-controls" style="display: none;">
+                <div id="starship-status">
+                    <div id="starship-status-text"></div>
+                    <div class="mission-progress"><div id="starship-progress"></div></div>
+                </div>
+                <label class="popover-label">Destination
+                    <select id="starship-target"></select>
+                </label>
+                <label class="popover-label">Propulsion <span id="starship-speed-value">1.0</span>×
+                    <input type="range" id="starship-speed" min="0.5" max="4.0" step="0.5" value="1.0">
+                </label>
+                <button id="follow-starship" class="popover-btn">Suivre StarShip</button>
+            </div>
+        </section>
+
+        <button id="reset-btn" class="popover-btn popover-footer-btn">Réinitialiser la simulation</button>
     </div>
 
     <!-- Dock cinéma -->
