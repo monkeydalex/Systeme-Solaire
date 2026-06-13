@@ -100,6 +100,9 @@ class App {
             onCameraReset: () => {
                 this.focusedPlanetKey = null;
                 this.cameraFollowingStarship = false;
+                this.focusTweening = false;
+                gsap.killTweensOf(camera.position);
+                gsap.killTweensOf(this.sceneManager.controls.target);
 
                 // Réinitialiser la caméra générale avec transition fluide
                 gsap.to(camera.position, { x: 0, y: 60, z: 130, duration: 1.2, ease: "power2.out" });
@@ -254,6 +257,7 @@ class App {
         if (this.audio) { this.audio.playSelect(); this.audio.playWhoosh(); }
 
         this.focusedPlanetKey = key;
+        this.cinematicFocus(key);
         this.cameraFollowingStarship = false;
 
         // Décocher le suivi de la caméra du Starship si nécessaire
@@ -343,6 +347,47 @@ class App {
         return null;
     }
 
+    // Onde concentrique brève au point focalisé
+    spawnFocusRipple(worldPos, radius) {
+        const scene = this.sceneManager.scene;
+        const geo = new THREE.RingGeometry(radius * 1.05, radius * 1.18, 48);
+        const mat = new THREE.MeshBasicMaterial({
+            color: 0x9fd8ff, transparent: true, opacity: 0.8,
+            side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending
+        });
+        const ring = new THREE.Mesh(geo, mat);
+        ring.position.copy(worldPos);
+        ring.quaternion.copy(this.sceneManager.camera.quaternion); // face caméra
+        scene.add(ring);
+        gsap.to(ring.scale, { x: 3, y: 3, z: 3, duration: 0.9, ease: 'power2.out' });
+        gsap.to(mat, {
+            opacity: 0, duration: 0.9, ease: 'power2.out',
+            onComplete: () => { scene.remove(ring); geo.dispose(); mat.dispose(); }
+        });
+    }
+
+    // Vol de caméra eased vers le cadrage d'un corps (interruptible)
+    cinematicFocus(key) {
+        const target = this.getFocusTarget(key);
+        if (!target) return;
+        const { pos, dist } = target;
+        const dirToSun = pos.clone().negate().normalize();
+        const side = new THREE.Vector3().crossVectors(dirToSun, new THREE.Vector3(0, 1, 0)).normalize();
+        const camPos = key === 'soleil'
+            ? pos.clone().add(new THREE.Vector3(dist, dist * 0.4, dist))
+            : pos.clone().addScaledVector(dirToSun, dist * 0.8).addScaledVector(side, dist * 0.5).add(new THREE.Vector3(0, dist * 0.35, 0));
+
+        this.focusTweening = true;
+        gsap.killTweensOf(this.sceneManager.camera.position);
+        gsap.killTweensOf(this.sceneManager.controls.target);
+        gsap.to(this.sceneManager.camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.4, ease: 'power3.inOut' });
+        gsap.to(this.sceneManager.controls.target, {
+            x: pos.x, y: pos.y, z: pos.z, duration: 1.4, ease: 'power3.inOut',
+            onComplete: () => { this.focusTweening = false; }
+        });
+        this.spawnFocusRipple(pos, key === 'soleil' ? 6 : (this.planets[key] ? this.planets[key].data.rayon : 1));
+    }
+
     animate() {
         requestAnimationFrame(this.animate.bind(this));
 
@@ -379,7 +424,7 @@ class App {
         const camera = this.sceneManager.camera;
         const controls = this.sceneManager.controls;
 
-        if (this.focusedPlanetKey) {
+        if (this.focusedPlanetKey && !this.focusTweening) {
             const target = this.getFocusTarget(this.focusedPlanetKey);
             if (target) {
                 const { pos, dist } = target;
