@@ -581,6 +581,13 @@ export class SpecialEffectsManager {
             this.scene.remove(this.spaceStation);
             this.spaceStation.traverse(child => {
                 if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(m => m.dispose());
+                    } else {
+                        child.material.dispose();
+                    }
+                }
             });
             this.spaceStation = null;
         }

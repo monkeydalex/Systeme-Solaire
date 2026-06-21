@@ -317,9 +317,35 @@ export class UIManager {
             cancelAnimationFrame(this.previewAnimationId);
             this.previewAnimationId = null;
         }
+        this.cleanupPreviewScene();
+    }
+
+    cleanupPreviewScene() {
+        if (this.previewScene) {
+            this.previewScene.traverse(child => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(m => this.disposeMaterial(m));
+                    } else {
+                        this.disposeMaterial(child.material);
+                    }
+                }
+            });
+            this.previewScene = null;
+            this.previewMesh = null;
+        }
+    }
+
+    disposeMaterial(material) {
+        if (material.map && material.map.isTemporaryTexture) {
+            material.map.dispose();
+        }
+        material.dispose();
     }
 
     showDetailPanel(key) {
+        this.cleanupPreviewScene();
         const info = this.callbacks.getPlanetData(key);
         if (!info) return;
 
@@ -429,6 +455,7 @@ export class UIManager {
             cancelAnimationFrame(this.previewAnimationId);
             this.previewAnimationId = null;
         }
+        this.cleanupPreviewScene();
 
         const width = container.clientWidth || 290;
         const height = container.clientHeight || 190;
@@ -536,7 +563,9 @@ export class UIManager {
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = colorHex;
             ctx.fillRect(0, 0, 256, 256);
-            material = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(canvas), roughness: 0.6 });
+            const tempTexture = new THREE.CanvasTexture(canvas);
+            tempTexture.isTemporaryTexture = true;
+            material = new THREE.MeshStandardMaterial({ map: tempTexture, roughness: 0.6 });
         }
 
         this.previewMesh = new THREE.Mesh(geometry, material);

@@ -20,10 +20,14 @@ const MIME_TYPES = {
 const server = http.createServer((req, res) => {
     console.log(`Requête reçue: ${req.url}`);
     
+    // Déterminer s'il faut servir le dossier de build "dist" ou la racine
+    const useDist = fs.existsSync('./dist/index.html');
+    const baseDir = useDist ? './dist' : '.';
+    
     // Gérer la racine
     let filePath = req.url === '/' 
-        ? './index.html' 
-        : '.' + req.url;
+        ? baseDir + '/index.html' 
+        : baseDir + req.url;
     
     const extname = path.extname(filePath);
     let contentType = MIME_TYPES[extname] || 'application/octet-stream';

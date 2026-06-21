@@ -37,6 +37,7 @@ export class Starship {
         // Pool de particules de traînée (sprites réutilisés, zéro churn)
         this.trailPool = [];
         this.trailSize = 110;
+        this.trailIndex = 0;
 
         this.create();
     }
@@ -194,8 +195,8 @@ export class Starship {
     }
 
     emitTrailParticle() {
-        const slot = this.trailPool.find(p => !p.active);
-        if (!slot) return;
+        const slot = this.trailPool[this.trailIndex];
+        this.trailIndex = (this.trailIndex + 1) % this.trailSize;
 
         this.nozzleAnchor.getWorldPosition(slot.sprite.position);
 

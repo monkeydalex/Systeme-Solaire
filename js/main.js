@@ -15,6 +15,7 @@ import { AudioManager } from './audio/AudioManager.mjs';
 import { Interactions } from './core/Interactions.mjs';
 import { formatTooltip } from './ui/tooltip.mjs';
 import { Onboarding, shouldPlayIntro } from './ui/Onboarding.mjs';
+import { CINEMATIC_CONSTELLATIONS } from './data/constellations.mjs';
 
 class App {
     constructor() {
@@ -183,9 +184,10 @@ class App {
             }
         });
 
-        // 6a. Clic sur un label de constellation → fiche détaillée
+        // 6a. Clic sur un label de constellation → fiche détaillée + focus caméra
         this.effectsManager.onConstellationClick = (key) => {
             this.uiManager.showConstellationDetail(key);
+            this.focusConstellation(key);
         };
 
         // Petit clic d'UI sur les boutons du popover
@@ -293,6 +295,50 @@ class App {
         if (openPanel && this.uiManager) {
             this.uiManager.showDetailPanel(key);
         }
+    }
+
+    // Oriente la caméra vers le centre de la constellation sélectionnée
+    focusConstellation(key) {
+        if (this.tour && this.tour.active) this.tour.stop();
+        if (this.audio) { this.audio.playSelect(); this.audio.playWhoosh(); }
+
+        this.focusedPlanetKey = null; // Désactiver le focus planète
+        this.cameraFollowingStarship = false;
+
+        // Décocher le suivi de la caméra du Starship si nécessaire
+        const followBtn = document.getElementById('follow-starship');
+        if (followBtn) {
+            followBtn.classList.remove('active');
+            followBtn.textContent = 'Suivre StarShip';
+        }
+
+        const cst = CINEMATIC_CONSTELLATIONS.find(c => c.key === key);
+        if (!cst) return;
+
+        // Calculer le barycentre de la constellation
+        const centroid = new THREE.Vector3();
+        cst.stars.forEach(s => centroid.add(new THREE.Vector3(...s.position)));
+        centroid.multiplyScalar(1 / cst.stars.length);
+
+        // Orienter la caméra vers le centre de la constellation avec animation fluide
+        gsap.killTweensOf(this.sceneManager.camera.position);
+        gsap.killTweensOf(this.sceneManager.controls.target);
+
+        // Placer la caméra proche du centre pour observer la constellation au loin
+        gsap.to(this.sceneManager.camera.position, {
+            x: -centroid.x * 0.15, // Léger décalage opposé pour de la parallaxe
+            y: -centroid.y * 0.15,
+            z: -centroid.z * 0.15,
+            duration: 1.5,
+            ease: 'power2.inOut'
+        });
+        gsap.to(this.sceneManager.controls.target, {
+            x: centroid.x,
+            y: centroid.y,
+            z: centroid.z,
+            duration: 1.5,
+            ease: 'power2.inOut'
+        });
     }
 
     resetSimulation() {
