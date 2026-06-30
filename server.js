@@ -22,13 +22,17 @@ const server = http.createServer((req, res) => {
     
     // Déterminer s'il faut servir le dossier de build "dist" ou la racine
     const useDist = fs.existsSync('./dist/index.html');
-    const baseDir = useDist ? './dist' : '.';
-    
-    // Gérer la racine
-    let filePath = req.url === '/' 
-        ? baseDir + '/index.html' 
-        : baseDir + req.url;
-    
+    const baseDir = path.resolve(useDist ? './dist' : '.');
+
+    // Gérer la racine et empêcher toute sortie de baseDir (path traversal)
+    const requestedPath = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
+    let filePath = path.join(baseDir, requestedPath);
+    if (!filePath.startsWith(baseDir + path.sep) && filePath !== baseDir) {
+        res.writeHead(403);
+        res.end('Accès refusé');
+        return;
+    }
+
     const extname = path.extname(filePath);
     let contentType = MIME_TYPES[extname] || 'application/octet-stream';
     
