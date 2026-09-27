@@ -6,7 +6,7 @@ export const planetData = {
         vitesseRotation: 0.004,
         vitesseOrbite: 0,
         axialTilt: 7.25,
-        texture: "./textures/sun.jpg",
+        texture: "./textures/sun.webp",
         emissive: 0xffff00,
         lumiere: true,
         description: "Le Soleil est l'étoile au centre de notre système solaire. C'est une sphère presque parfaite de plasma chaud, chauffée par la fusion nucléaire dans son noyau.",
@@ -26,7 +26,7 @@ export const planetData = {
         vitesseRotation: 0.004,
         vitesseOrbite: 0.02,
         axialTilt: 0.03,
-        texture: "./textures/mercury.jpg",
+        texture: "./textures/mercury.webp",
         description: "Mercure est la planète la plus proche du Soleil et la plus petite du système solaire. Sa surface est couverte de cratères similaires à ceux de la Lune.",
         facts: {
             type: "Planète tellurique",
@@ -44,7 +44,7 @@ export const planetData = {
         vitesseRotation: 0.002,
         vitesseOrbite: 0.015,
         axialTilt: 177.4,
-        texture: "./textures/venus.jpg",
+        texture: "./textures/venus_atmosphere.webp",
         description: "Vénus est la deuxième planète du système solaire. Elle est souvent appelée la jumelle de la Terre en raison de sa taille similaire, mais son atmosphère dense de dioxyde de carbone la rend extrêmement chaude.",
         facts: {
             type: "Planète tellurique",
@@ -62,11 +62,11 @@ export const planetData = {
         vitesseRotation: 0.01,
         vitesseOrbite: 0.01,
         axialTilt: 23.4,
-        texture: "./textures/earth.jpg",
+        texture: "./textures/earth_day.webp",
         description: "La Terre est notre planète d'origine, la seule connue pour abriter la vie. Elle est caractérisée par ses océans d'eau liquide, son atmosphère riche en oxygène et sa biodiversité.",
         moons: [
             {
-                key: "lune", nom: "Lune", rayon: 0.3, distance: 2.4, vitesseOrbite: 0.05, color: "#b8b8b8",
+                key: "lune", nom: "Lune", rayon: 0.3, distance: 2.4, vitesseOrbite: 0.05, color: "#b8b8b8", texture: "./textures/moon.webp",
                 description: "La Lune est l'unique satellite naturel de la Terre. Sa surface criblée de cratères témoigne du bombardement météoritique du système solaire primitif.",
                 facts: { type: "Lune de la Terre", diametre: "3 474 km", distance: "384 400 km de la Terre", periode: "27,3 jours", temperature: "-173 à 127 °C", color: "#b8b8b8" }
             }
@@ -87,7 +87,7 @@ export const planetData = {
         vitesseRotation: 0.008,
         vitesseOrbite: 0.008,
         axialTilt: 25.2,
-        texture: "./textures/mars.jpg",
+        texture: "./textures/mars.webp",
         description: "Mars est surnommée la planète rouge en raison de la présence d'oxyde de fer à sa surface. Elle possède des calottes polaires, des vallées, des déserts et des volcans éteints comme l'Olympus Mons.",
         facts: {
             type: "Planète tellurique",
@@ -105,7 +105,7 @@ export const planetData = {
         vitesseRotation: 0.02,
         vitesseOrbite: 0.005,
         axialTilt: 3.1,
-        texture: "./textures/jupiter.jpg",
+        texture: "./textures/jupiter.webp",
         description: "Jupiter est la plus grande planète du système solaire. C'est une géante gazeuse avec une atmosphère composée principalement d'hydrogène et d'hélium, et sa caractéristique la plus connue est sa Grande Tache Rouge.",
         moons: [
             {
@@ -145,7 +145,7 @@ export const planetData = {
         vitesseRotation: 0.018,
         vitesseOrbite: 0.004,
         axialTilt: 26.7,
-        texture: "./textures/saturn.jpg",
+        texture: "./textures/saturn.webp",
         description: "Saturne est célèbre pour ses anneaux spectaculaires composés de glace et de poussière. C'est une géante gazeuse similaire à Jupiter mais moins massive.",
         moons: [
             {
@@ -170,7 +170,7 @@ export const planetData = {
         vitesseRotation: 0.012,
         vitesseOrbite: 0.003,
         axialTilt: 97.8,
-        texture: "./textures/uranus.jpg",
+        texture: "./textures/uranus.webp",
         description: "Uranus est une géante de glace qui a la particularité de tourner sur un axe presque parallèle au plan de son orbite, comme si elle était couchée sur le côté.",
         facts: {
             type: "Géante de glace",
@@ -188,7 +188,7 @@ export const planetData = {
         vitesseRotation: 0.014,
         vitesseOrbite: 0.002,
         axialTilt: 28.3,
-        texture: "./textures/neptune.jpg",
+        texture: "./textures/neptune.webp",
         description: "Neptune est la planète la plus éloignée du Soleil. C'est une géante de glace caractérisée par sa couleur bleue intense due à la présence de méthane dans son atmosphère.",
         facts: {
             type: "Géante de glace",

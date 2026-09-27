@@ -33,5 +33,6 @@
   "devDependencies": {
     "vite": "^8.3.1"
   },
-  "packageManager": "pnpm@11.1.2"
+  "packageManager": "pnpm@11.1.2",
+  "type": "module"
 }
