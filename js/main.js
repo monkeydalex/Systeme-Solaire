@@ -1,3 +1,8 @@
+// Police hébergée localement (pas de requête vers Google Fonts), sous-ensemble latin
+import '@fontsource/outfit/latin-300.css';
+import '@fontsource/outfit/latin-400.css';
+import '@fontsource/outfit/latin-600.css';
+import '@fontsource/outfit/latin-800.css';
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { SceneManager } from './core/SceneManager.js';
@@ -246,7 +251,8 @@ class App {
         });
         this.onboarding.fadeOutLoader();
         const showTip = () => this.onboarding.showTip('Survolez ou cliquez une planète pour l’explorer.');
-        if (shouldPlayIntro(window.localStorage)) {
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (shouldPlayIntro(window.localStorage, reducedMotion)) {
             this.onboarding.playIntro(showTip);
         } else {
             showTip();

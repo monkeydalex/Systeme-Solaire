@@ -17,3 +17,7 @@ test('shouldPlayIntro: true on first visit', () => {
 test('shouldPlayIntro: false once the flag is set', () => {
     assert.equal(shouldPlayIntro(fakeStorage({ 'ss_intro_seen': '1' })), false);
 });
+
+test('shouldPlayIntro: false when the user prefers reduced motion', () => {
+    assert.equal(shouldPlayIntro(fakeStorage(), true), false);
+});

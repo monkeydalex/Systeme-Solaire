@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/outfit':
+        specifier: ^5.3.0
+        version: 5.3.0
       gsap:
         specifier: ^3.15.0
         version: 3.15.0
@@ -23,6 +26,9 @@ importers:
         version: 8.3.1
 
 packages:
+
+  '@fontsource/outfit@5.3.0':
+    resolution: {integrity: sha512-0AVHzTTVJSxWDOxPKSfMeHhZeBFDU3cmgrcOb76ZEyhGo0+xgyG3GsLF3h9+X8w0IX7G4jzjJgFQEBiWdX6VgA==}
 
   '@oxc-project/types@0.151.0':
     resolution: {integrity: sha512-J1yXrIlNDZVzE3ada310xeAw7nH8yCAyLPuUIsjKatFPmfn5bS1oW+cM+QsGOtVWd5nhSpbwZWx/rue+r5Z+PA==}
@@ -300,6 +306,8 @@ packages:
         optional: true
 
 snapshots:
+
+  '@fontsource/outfit@5.3.0': {}
 
   '@oxc-project/types@0.151.0': {}
 

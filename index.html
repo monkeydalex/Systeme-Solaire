@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Système Solaire 3D</title>
+    <meta name="description" content="Simulation 3D interactive du système solaire : planètes, lunes, anneaux de Saturne, visite guidée et fiches détaillées.">
+    <meta property="og:title" content="Système Solaire 3D">
+    <meta property="og:description" content="Simulation 3D interactive et pédagogique du système solaire (Three.js).">
+    <meta property="og:type" content="website">
+    <meta name="theme-color" content="#020205">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪐</text></svg>">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -20,8 +22,8 @@
     </header>
 
     <!-- Fiche détaillée (planète ou lune) -->
-    <aside id="detail-panel">
-        <button id="close-panel" title="Fermer">✕</button>
+    <aside id="detail-panel" role="dialog" aria-labelledby="detail-name">
+        <button id="close-panel" title="Fermer" aria-label="Fermer la fiche">✕</button>
         <span id="detail-tag"></span>
         <h2 id="detail-name"></h2>
         <div id="planet-preview-container"></div>
@@ -95,14 +97,14 @@
         <div id="dock-planets"></div>
         <div class="dock-sep"></div>
         <div class="dock-controls">
-            <button id="pause-btn" class="dock-btn" title="Pause / Lecture (Espace)">❚❚</button>
-            <input type="range" id="speed-slider" min="0" max="100" value="50" title="Vitesse de simulation">
+            <button id="pause-btn" class="dock-btn" title="Pause / Lecture (Espace)" aria-label="Pause / Lecture">❚❚</button>
+            <input type="range" id="speed-slider" min="0" max="100" value="50" title="Vitesse de simulation" aria-label="Vitesse de simulation">
             <span id="speed-value" title="Vitesse de simulation">×1.0</span>
             <span class="speed-markers" aria-hidden="true"><i>lent</i><i>×1</i><i>rapide</i></span>
             <button id="tour-btn">🚀 Visite guidée</button>
-            <button id="effects-btn" class="dock-btn" title="Effets &amp; extras">✦</button>
-            <button id="audio-btn" class="dock-btn" title="Activer le son">🔇</button>
-            <button id="reset-camera-btn" class="dock-btn" title="Vue d'ensemble">⌖</button>
+            <button id="effects-btn" class="dock-btn" title="Effets &amp; extras" aria-label="Effets et réglages">✦</button>
+            <button id="audio-btn" class="dock-btn" title="Activer le son" aria-label="Activer le son">🔇</button>
+            <button id="reset-camera-btn" class="dock-btn" title="Vue d'ensemble" aria-label="Vue d'ensemble">⌖</button>
         </div>
     </nav>
 

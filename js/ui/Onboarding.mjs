@@ -2,8 +2,10 @@ import gsap from 'gsap';
 
 const INTRO_KEY = 'ss_intro_seen';
 
-// Logique pure : doit-on jouer l'intro ? (première visite de session/appareil)
-export function shouldPlayIntro(storage) {
+// Logique pure : doit-on jouer l'intro ? (première visite de session/appareil,
+// et pas si l'utilisateur a demandé à réduire les animations)
+export function shouldPlayIntro(storage, prefersReducedMotion = false) {
+    if (prefersReducedMotion) return false;
     try { return storage.getItem(INTRO_KEY) !== '1'; }
     catch { return false; }
 }

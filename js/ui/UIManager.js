@@ -133,6 +133,7 @@ export class UIManager {
             const active = audioBtn.classList.toggle('active');
             audioBtn.textContent = active ? '🔊' : '🔇';
             audioBtn.title = active ? 'Couper le son' : 'Activer le son';
+            audioBtn.setAttribute('aria-label', audioBtn.title);
             this.callbacks.onAudioToggle(active);
         });
 
