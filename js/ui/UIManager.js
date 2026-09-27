@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { planetData } from '../data/planetData.js';
 import { SCALE_MODE_INFO } from '../core/ScaleModes.mjs';
 import { CINEMATIC_CONSTELLATIONS } from '../data/constellations.mjs';
+import { createRingGeometry } from '../objects/Planet.js';
 
 // Interface « Dock cinéma » : dock bas (vignettes + contrôles),
 // fiche latérale droite, popover effets & extras.
@@ -398,7 +399,7 @@ export class UIManager {
 
         document.getElementById('detail-panel').classList.add('open');
 
-        this.initPreviewScene(key, info.color, info.texture);
+        this.initPreviewScene(info.color, info.textures || {});
     }
 
     // Remplit le tableau de la fiche (lignes { label, value })
@@ -515,7 +516,7 @@ export class UIManager {
     }
 
     // --- Mini scène d'aperçu 3D ---
-    initPreviewScene(bodyKey, colorHex, originalTexture) {
+    initPreviewScene(colorHex, textures) {
         const container = document.getElementById('planet-preview-container');
         if (!container) return;
 
@@ -526,6 +527,8 @@ export class UIManager {
         if (!this.previewRenderer) {
             this.previewRenderer = new THREE.WebGLRenderer({ antialias: true });
             this.previewRenderer.setClearColor(0x070a18, 1);
+            this.previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            this.previewRenderer.toneMapping = THREE.ACESFilmicToneMapping;
         }
         // (Ré)attacher le canvas WebGL — il a pu être détaché par un aperçu 2D
         if (this.previewRenderer.domElement.parentNode !== container) {
@@ -538,23 +541,31 @@ export class UIManager {
         this.previewRenderer.setSize(width, height);
 
         this.previewScene = new THREE.Scene();
-        this.previewCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10);
-        this.previewCamera.position.z = 4.2;
+        this.previewCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 20);
+        // Recul pour que les anneaux tiennent dans le cadre
+        this.previewCamera.position.z = textures.ring ? 7.2 : 4.2;
 
         // Éclairage studio
         this.previewScene.add(new THREE.AmbientLight(0xffffff, 0.3));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 2.2);
         dirLight.position.set(5, 3, 5);
         this.previewScene.add(dirLight);
 
-        const geometry = new THREE.SphereGeometry(1.5, 32, 32);
+        const geometry = new THREE.SphereGeometry(1.5, 64, 64);
 
         let material;
-        if (originalTexture) {
+        if (textures.map && textures.emissive) {
+            // Soleil : auto-lumineux, non éclairé
+            material = new THREE.MeshBasicMaterial({ map: textures.map });
+        } else if (textures.map) {
             material = new THREE.MeshStandardMaterial({
-                map: originalTexture,
-                roughness: 0.6,
-                metalness: 0.1
+                map: textures.map,
+                normalMap: textures.normalMap || null,
+                roughnessMap: textures.roughnessMap || null,
+                bumpMap: textures.bumpMap || null,
+                bumpScale: 1.5,
+                roughness: textures.roughnessMap ? 1 : 0.95,
+                metalness: 0
             });
         } else {
             // Texture colorée unie en secours (Soleil shader, échec de chargement…)
@@ -571,16 +582,26 @@ export class UIManager {
         this.previewMesh = new THREE.Mesh(geometry, material);
         this.previewScene.add(this.previewMesh);
 
-        // Anneaux pour Saturne
-        if (bodyKey === 'saturne') {
-            const ringGeo = new THREE.RingGeometry(1.8, 2.8, 64);
-            const ringMat = new THREE.MeshStandardMaterial({
-                color: 0xcca770,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.8
-            });
-            const ring = new THREE.Mesh(ringGeo, ringMat);
+        // Couche de nuages (Terre), tourne avec la planète
+        if (textures.clouds) {
+            const clouds = new THREE.Mesh(
+                new THREE.SphereGeometry(1.5 * 1.012, 64, 64),
+                new THREE.MeshStandardMaterial({
+                    alphaMap: textures.clouds, transparent: true, depthWrite: false, roughness: 1
+                })
+            );
+            this.previewMesh.add(clouds);
+        }
+
+        // Anneaux (Saturne) : même texture et mêmes proportions que dans la scène
+        if (textures.ring) {
+            const [inner, outer] = textures.ringRadii;
+            const ring = new THREE.Mesh(
+                createRingGeometry(1.5 * inner, 1.5 * outer),
+                new THREE.MeshBasicMaterial({
+                    map: textures.ring, side: THREE.DoubleSide, transparent: true, depthWrite: false
+                })
+            );
             ring.rotation.x = Math.PI / 2.3;
             this.previewScene.add(ring);
         }

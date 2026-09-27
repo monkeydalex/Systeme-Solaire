@@ -11,10 +11,16 @@ export class SceneManager {
 
     init(container) {
         this.scene = new THREE.Scene();
-        // Fond noir spatial profond
+        // Fond : Voie lactée réelle (panorama équirectangulaire), noir en attendant
         this.scene.background = new THREE.Color(0x020205);
+        new THREE.TextureLoader().load('./textures/milky_way.webp', (texture) => {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            texture.colorSpace = THREE.SRGBColorSpace;
+            this.scene.background = texture;
+            this.scene.backgroundIntensity = 0.9;
+        });
 
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
         this.camera.position.set(0, 60, 130);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
@@ -22,8 +28,6 @@ export class SceneManager {
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 1.3;
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFShadowMap;
         
         // Supprimer d'éventuels anciens canvas du container
         while (container.firstChild) {

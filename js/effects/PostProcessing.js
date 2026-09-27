@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
 export class PostProcessing {
     constructor(renderer, scene, camera) {
@@ -33,6 +34,9 @@ export class PostProcessing {
         );
         
         this.composer.addPass(this.bloomPass);
+
+        // 3. Sortie : tone mapping + conversion sRGB (ignorés dans les rendus intermédiaires)
+        this.composer.addPass(new OutputPass());
     }
 
     resize(width, height) {

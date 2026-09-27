@@ -23,10 +23,19 @@ export class Interactions {
         this.hoveredKey = null;
 
         this._meshes = Object.values(bodies).map(b => b.mesh);
+        this._downX = 0;
+        this._downY = 0;
         this._onMove = this._onMove.bind(this);
         this._onClick = this._onClick.bind(this);
+        this._onDown = this._onDown.bind(this);
         window.addEventListener('pointermove', this._onMove);
+        window.addEventListener('pointerdown', this._onDown);
         window.addEventListener('click', this._onClick);
+    }
+
+    _onDown(event) {
+        this._downX = event.clientX;
+        this._downY = event.clientY;
     }
 
     _raycast(event) {
@@ -37,7 +46,10 @@ export class Interactions {
     }
 
     _onMove(event) {
-        const key = pickHovered(this._raycast(event), this.bodies);
+        // Pointeur sur l'interface (dock, fiche…) : pas de survol à travers
+        const key = event.target.tagName === 'CANVAS'
+            ? pickHovered(this._raycast(event), this.bodies)
+            : null;
         if (key !== this.hoveredKey) {
             this.hoveredKey = key;
             document.body.style.cursor = key ? 'pointer' : '';
@@ -47,6 +59,8 @@ export class Interactions {
 
     _onClick(event) {
         if (event.target.tagName !== 'CANVAS') return;
+        // Fin d'une rotation de caméra (glisser) : ce n'est pas un clic de sélection
+        if (Math.hypot(event.clientX - this._downX, event.clientY - this._downY) > 5) return;
         const key = pickHovered(this._raycast(event), this.bodies);
         if (key) this.onFocus(key);
     }
@@ -74,6 +88,7 @@ export class Interactions {
 
     dispose() {
         window.removeEventListener('pointermove', this._onMove);
+        window.removeEventListener('pointerdown', this._onDown);
         window.removeEventListener('click', this._onClick);
     }
 }

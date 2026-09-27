@@ -8,6 +8,125 @@ const noise2D = createNoise2D();
 // Cache local pour les textures générées
 const generatedTextureCache = {};
 
+const textureLoader = new THREE.TextureLoader();
+
+// Texture auxiliaire (relief, rugosité, nuages…) : données linéaires, pas sRGB
+function loadDataTexture(url) {
+    const texture = textureLoader.load(url);
+    texture.anisotropy = 8;
+    return texture;
+}
+
+// Masque la lumière émise (villes de la Terre) du côté jour : le Soleil est à
+// l'origine, sa direction se déduit donc de la position monde du fragment.
+function maskEmissiveOnDaySide(material) {
+    material.onBeforeCompile = (shader) => {
+        shader.vertexShader = 'varying vec3 vSunWorldPos;\nvarying vec3 vSunWorldNormal;\n' +
+            shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+                vSunWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+                vSunWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`);
+        shader.fragmentShader = 'varying vec3 vSunWorldPos;\nvarying vec3 vSunWorldNormal;\n' +
+            shader.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+                float sunFacing = dot(normalize(vSunWorldNormal), normalize(-vSunWorldPos));
+                totalEmissiveRadiance *= smoothstep(0.12, -0.18, sunFacing);`);
+    };
+}
+
+// Atmosphère : halo de bord (fresnel) éclairé seulement du côté du Soleil
+function createAtmosphereMaterial(color, strength) {
+    return new THREE.ShaderMaterial({
+        vertexShader: `
+            varying vec3 vNormalView;
+            varying vec3 vNormalWorld;
+            varying vec3 vPosWorld;
+            void main() {
+                vNormalView = normalize(normalMatrix * normal);
+                vNormalWorld = normalize(mat3(modelMatrix) * normal);
+                vPosWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform vec3 color;
+            uniform float strength;
+            varying vec3 vNormalView;
+            varying vec3 vNormalWorld;
+            varying vec3 vPosWorld;
+            void main() {
+                float rim = pow(clamp(0.78 - dot(vNormalView, vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 2.2);
+                float day = smoothstep(-0.35, 0.55, dot(normalize(vNormalWorld), normalize(-vPosWorld)));
+                gl_FragColor = vec4(color * rim * day * strength, 1.0);
+            }
+        `,
+        uniforms: {
+            color: { value: color },
+            strength: { value: strength }
+        },
+        blending: THREE.AdditiveBlending,
+        side: THREE.BackSide,
+        transparent: true,
+        depthWrite: false
+    });
+}
+
+// Anneau plat dont les UVs sont remappés radialement : u = position entre rayon
+// interne et externe, sinon la texture 1D serait plaquée de gauche à droite
+export function createRingGeometry(innerRadius, outerRadius) {
+    const geometry = new THREE.RingGeometry(innerRadius, outerRadius, 128);
+    const pos = geometry.attributes.position;
+    const uv = geometry.attributes.uv;
+    const v3 = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+        v3.fromBufferAttribute(pos, i);
+        uv.setXY(i, (v3.length() - innerRadius) / (outerRadius - innerRadius), 0.5);
+    }
+    return geometry;
+}
+
+// Anneaux : texture radiale (couleur + transparence) et ombre de la planète,
+// calculée analytiquement (rayon anneau → Soleil intercepte-t-il la sphère ?)
+function createRingMaterial(texture, planetCenter, planetRadius) {
+    return new THREE.ShaderMaterial({
+        vertexShader: `
+            varying vec2 vUv;
+            varying vec3 vPosWorld;
+            void main() {
+                vUv = uv;
+                vPosWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D ringMap;
+            uniform vec3 planetCenter;
+            uniform float planetRadius;
+            varying vec2 vUv;
+            varying vec3 vPosWorld;
+            void main() {
+                vec4 texel = texture2D(ringMap, vec2(vUv.x, 0.5));
+                vec3 toSun = normalize(-vPosWorld);
+                vec3 oc = vPosWorld - planetCenter;
+                float b = dot(oc, toSun);
+                float closest = length(oc - b * toSun);
+                float shadow = b < 0.0
+                    ? smoothstep(planetRadius * 0.92, planetRadius * 1.04, closest)
+                    : 1.0;
+                vec3 col = texel.rgb * (0.12 + 0.95 * shadow);
+                gl_FragColor = vec4(col, texel.a * 0.95);
+                #include <colorspace_fragment>
+            }
+        `,
+        uniforms: {
+            ringMap: { value: texture },
+            planetCenter: { value: planetCenter },
+            planetRadius: { value: planetRadius }
+        },
+        side: THREE.DoubleSide,
+        transparent: true,
+        depthWrite: false
+    });
+}
+
 export class Planet {
     constructor(key, data, scene) {
         this.key = key;
@@ -35,32 +154,39 @@ export class Planet {
         const geometry = new THREE.SphereGeometry(this.data.rayon, 64, 64);
 
         // 2. Texture & Matériau
-        const texture = this.loadTexture();
-
         let material;
         if (this.key === 'soleil') {
-            // Surface animée par shader (FBM) — la texture JPG n'est plus utilisée
+            // Surface animée par shader (FBM) : pas de texture à charger
             material = createSunMaterial();
             this.sunMaterial = material;
+        } else if (this.key === 'terre') {
+            // Océans brillants / continents mats, relief, lumières des villes la nuit
+            material = new THREE.MeshStandardMaterial({
+                map: this.loadTexture(),
+                normalMap: loadDataTexture('./textures/earth_normal.webp'),
+                normalScale: new THREE.Vector2(0.8, 0.8),
+                roughnessMap: loadDataTexture('./textures/earth_roughness.webp'),
+                roughness: 1,
+                metalness: 0,
+                emissiveMap: this.loadColorTexture('./textures/earth_night.webp'),
+                emissive: new THREE.Color(0xffd9a8),
+                emissiveIntensity: 1.6
+            });
+            maskEmissiveOnDaySide(material);
         } else {
+            const texture = this.loadTexture();
+            // Relief tiré de la texture de couleur : seulement pour les surfaces rocheuses
+            const rocky = this.key === 'mercure' || this.key === 'mars';
             material = new THREE.MeshStandardMaterial({
                 map: texture,
-                roughness: 0.8,
-                metalness: 0.1,
-                bumpMap: texture, // Utilisation de la même texture comme bump map pour le relief
-                bumpScale: this.data.rayon * 0.02
+                roughness: 0.95,
+                metalness: 0,
+                bumpMap: rocky ? texture : null,
+                bumpScale: rocky ? 1.5 : 1
             });
-            
-            // Propriétés spéculaires pour l'eau sur la Terre
-            if (this.key === 'terre') {
-                material.roughness = 0.4;
-                material.metalness = 0.05;
-            }
         }
 
         this.mesh = new THREE.Mesh(geometry, material);
-        this.mesh.castShadow = this.key !== 'soleil';
-        this.mesh.receiveShadow = this.key !== 'soleil';
         this.tiltGroup.rotation.z = THREE.MathUtils.degToRad(this.data.axialTilt || 0);
         this.tiltGroup.add(this.mesh);
         this.group.add(this.tiltGroup);
@@ -71,10 +197,6 @@ export class Planet {
             // PointLight centrale puissante (decay 0 : pas d'atténuation,
             // les distances de la scène sont pédagogiques, pas physiques)
             this.light = new THREE.PointLight(0xffffff, 2.4, 0, 0);
-            this.light.castShadow = true;
-            this.light.shadow.mapSize.width = 2048;
-            this.light.shadow.mapSize.height = 2048;
-            this.light.shadow.bias = -0.001;
             this.group.add(this.light);
 
             // Sprite de lueur du soleil
@@ -109,14 +231,15 @@ export class Planet {
 
         // B. Terre (Nuages + Atmosphère)
         if (this.key === 'terre') {
-            // Nuages
-            const cloudsGeometry = new THREE.SphereGeometry(this.data.rayon + 0.03, 64, 64);
-            const cloudsTexture = this.createCloudsTexture();
+            // Nuages réels (niveaux de gris utilisés comme transparence)
+            const cloudsGeometry = new THREE.SphereGeometry(this.data.rayon * 1.012, 64, 64);
             const cloudsMaterial = new THREE.MeshStandardMaterial({
-                alphaMap: cloudsTexture,
+                alphaMap: loadDataTexture('./textures/earth_clouds.webp'),
                 transparent: true,
+                depthWrite: false,
                 color: 0xffffff,
-                blending: THREE.NormalBlending
+                roughness: 1,
+                metalness: 0
             });
             this.cloudsMesh = new THREE.Mesh(cloudsGeometry, cloudsMaterial);
             this.tiltGroup.add(this.cloudsMesh);
@@ -125,32 +248,9 @@ export class Planet {
         // C. Atmosphère (Terre & Vénus)
         if (this.key === 'terre' || this.key === 'venus') {
             const atmosphereGeometry = new THREE.SphereGeometry(this.data.rayon + 0.14, 64, 64);
-            
-            // Shader d'atmosphère (Glow externe)
-            const color = this.key === 'terre' ? new THREE.Color(0x3a9eff) : new THREE.Color(0xffcc88);
-            const atmosphereMaterial = new THREE.ShaderMaterial({
-                vertexShader: `
-                    varying vec3 vNormal;
-                    void main() {
-                        vNormal = normalize(normalMatrix * normal);
-                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                    }
-                `,
-                fragmentShader: `
-                    varying vec3 vNormal;
-                    uniform vec3 color;
-                    void main() {
-                        float intensity = pow(0.78 - dot(vNormal, vec3(0, 0, 1.0)), 2.2) * 1.5;
-                        gl_FragColor = vec4(color, 1.0) * intensity;
-                    }
-                `,
-                uniforms: {
-                    color: { value: color }
-                },
-                blending: THREE.AdditiveBlending,
-                side: THREE.BackSide,
-                transparent: true
-            });
+            const atmosphereMaterial = this.key === 'terre'
+                ? createAtmosphereMaterial(new THREE.Color(0x3a9eff), 1.5)
+                : createAtmosphereMaterial(new THREE.Color(0xffcc88), 1.2);
 
             this.atmosphereMesh = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
             this.group.add(this.atmosphereMesh);
@@ -160,41 +260,15 @@ export class Planet {
         if (this.key === 'saturne') {
             const innerRadius = this.data.rayon + 0.5;
             const outerRadius = this.data.rayon + 3.0;
-            const ringGeometry = new THREE.RingGeometry(innerRadius, outerRadius, 128);
+            const ringGeometry = createRingGeometry(innerRadius, outerRadius);
 
-            // Remapper les UVs radialement : u = position entre rayon interne et externe,
-            // sinon la texture 1D serait plaquée de gauche à droite sur le plan
-            const ringPos = ringGeometry.attributes.position;
-            const ringUv = ringGeometry.attributes.uv;
-            const v3 = new THREE.Vector3();
-            for (let i = 0; i < ringPos.count; i++) {
-                v3.fromBufferAttribute(ringPos, i);
-                const r = (v3.length() - innerRadius) / (outerRadius - innerRadius);
-                ringUv.setXY(i, r, 0.5);
-            }
-
-
-            // Texture d'anneau avec Cassini Division procédurale
-            const ringCanvas = this.createSaturnRingsTexture();
-            const ringTexture = new THREE.CanvasTexture(ringCanvas);
-            
-            // Orienter correctement la texture sur l'anneau
-            ringTexture.wrapS = THREE.ClampToEdgeWrapping;
-            ringTexture.wrapT = THREE.ClampToEdgeWrapping;
-            
-            const ringMaterial = new THREE.MeshStandardMaterial({
-                map: ringTexture,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.9,
-                roughness: 0.6
-            });
+            // Texture réelle des anneaux (division de Cassini incluse), ombre de Saturne
+            const ringTexture = this.loadColorTexture('./textures/saturn_ring.webp');
+            const ringMaterial = createRingMaterial(ringTexture, this.group.position, this.data.rayon);
 
             this.ringsMesh = new THREE.Mesh(ringGeometry, ringMaterial);
             // Plan équatorial exact : l'inclinaison réelle vient du tiltGroup
             this.ringsMesh.rotation.x = Math.PI / 2;
-            this.ringsMesh.receiveShadow = true;
-            this.ringsMesh.castShadow = true;
             this.tiltGroup.add(this.ringsMesh);
         }
 
@@ -312,19 +386,39 @@ export class Planet {
     // Texture pour l'aperçu de la fiche : les corps dont la vraie texture est
     // inutilisable en gros plan (Soleil devenu shader, dégradés trop lisses
     // d'Uranus/Neptune) utilisent la version procédurale détaillée
-    getPreviewTexture() {
-        if (this.key === 'soleil' || this.key === 'uranus' || this.key === 'neptune') {
-            return this.getOrCreateProceduralTexture();
+    // Textures réutilisées par l'aperçu 3D de la fiche (mêmes que dans la scène)
+    getPreviewTextures() {
+        if (this.key === 'soleil') {
+            // Le Soleil de la scène est un shader : l'aperçu charge sa texture à la demande
+            if (!this.previewTexture) this.previewTexture = this.loadTexture();
+            return { map: this.previewTexture, emissive: true };
         }
-        return this.mesh.material.map;
+        const material = this.mesh.material;
+        return {
+            map: material.map,
+            normalMap: material.normalMap,
+            roughnessMap: material.roughnessMap,
+            bumpMap: material.bumpMap,
+            clouds: this.cloudsMesh ? this.cloudsMesh.material.alphaMap : null,
+            ring: this.ringsMesh ? this.ringsMesh.material.uniforms.ringMap.value : null,
+            ringRadii: this.ringsMesh
+                ? [(this.data.rayon + 0.5) / this.data.rayon, (this.data.rayon + 3.0) / this.data.rayon]
+                : null
+        };
     }
 
-    // Charge la vraie texture JPG ; retombe sur la texture procédurale en cas d'échec
+    loadColorTexture(url) {
+        const texture = textureLoader.load(url);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 8;
+        return texture;
+    }
+
+    // Charge la vraie texture ; retombe sur la texture procédurale en cas d'échec
     loadTexture() {
         if (!this.data.texture) return this.getOrCreateProceduralTexture();
 
-        const loader = new THREE.TextureLoader();
-        const texture = loader.load(
+        const texture = textureLoader.load(
             this.data.texture,
             undefined,
             undefined,
@@ -542,46 +636,6 @@ export class Planet {
         ctx.putImageData(imgData, 0, 0);
     }
 
-    createCloudsTexture() {
-        // Texture de nuages uniquement (canal alpha)
-        const size = 1024;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        const imgData = ctx.getImageData(0, 0, size, size);
-        const data = imgData.data;
-
-        for (let y = 0; y < size; y++) {
-            for (let x = 0; x < size; x++) {
-                const idx = (y * size + x) * 4;
-                
-                // Vent d'ouest (étirement horizontal)
-                const nx = x + noise2D(x/100, y/100) * 10;
-                
-                // Bruit fractal pour les motifs de nuages
-                let val = 0;
-                let scale = 150;
-                let weight = 1.0;
-                for (let j = 0; j < 3; j++) {
-                    val += (noise2D(nx / scale, y / scale) * 0.5 + 0.5) * weight;
-                    scale /= 2;
-                    weight *= 0.55;
-                }
-
-                // Masque alpha
-                const alpha = val > 0.8 ? Math.min(255, (val - 0.8) * 4.5 * 255) : 0;
-                
-                data[idx] = 255;
-                data[idx+1] = 255;
-                data[idx+2] = 255;
-                data[idx+3] = alpha;
-            }
-        }
-        ctx.putImageData(imgData, 0, 0);
-        return new THREE.CanvasTexture(canvas);
-    }
-
     drawMarsTexture(ctx, size) {
         // Texture rocheuse rouge oxyde
         this.drawNoiseBasedRelief(ctx, size, '#c55a30', '#8c3114', 25);
@@ -761,38 +815,6 @@ export class Planet {
 
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, size, size);
-        return canvas;
-    }
-
-    createSaturnRingsTexture() {
-        // Texture unidimensionnelle projetée radialement
-        const size = 512;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = 1;
-        const ctx = canvas.getContext('2d');
-
-        // Créer un dégradé représentant la Cassini Division et les différentes bandes des anneaux
-        const grad = ctx.createLinearGradient(0, 0, size, 0);
-        grad.addColorStop(0.0, 'rgba(0, 0, 0, 0)');          // Proche planète
-        grad.addColorStop(0.12, 'rgba(165, 140, 110, 0.15)'); // Anneau C faible
-        grad.addColorStop(0.25, 'rgba(220, 195, 160, 0.85)'); // Anneau B interne
-        grad.addColorStop(0.60, 'rgba(235, 210, 175, 0.95)'); // Anneau B externe
-        grad.addColorStop(0.64, 'rgba(0, 0, 0, 0)');          // Cassini Division (vide)
-        grad.addColorStop(0.69, 'rgba(195, 170, 140, 0.75)'); // Anneau A interne
-        grad.addColorStop(0.92, 'rgba(175, 150, 120, 0.65)'); // Anneau A externe
-        grad.addColorStop(0.96, 'rgba(0, 0, 0, 0)');          // Encke Gap (vide)
-        grad.addColorStop(1.0, 'rgba(150, 125, 95, 0.25)');   // Anneau F externe
-
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, size, 1);
-
-        // Bandes fines aléatoires pour donner du grain aux anneaux
-        for (let i = 0; i < 60; i++) {
-            const x = Math.floor(80 + Math.random() * (size - 100));
-            ctx.fillStyle = `rgba(0, 0, 0, ${0.05 + Math.random() * 0.22})`;
-            ctx.fillRect(x, 0, 1 + Math.floor(Math.random() * 2), 1);
-        }
         return canvas;
     }
 }

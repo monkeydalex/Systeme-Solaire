@@ -48,8 +48,16 @@ export class Onboarding {
         skip.addEventListener('click', finish);
         document.body.appendChild(skip);
         this._skipEl = skip;
-        this._onKey = (e) => { if (e.code === 'Escape' || e.code === 'Space') finish(); };
-        window.addEventListener('keydown', this._onKey);
+        // Phase de capture + arrêt de la propagation : Espace ne doit pas aussi
+        // déclencher la pause (raccourci global de UIManager)
+        this._onKey = (e) => {
+            if (e.code === 'Escape' || e.code === 'Space') {
+                e.preventDefault();
+                e.stopPropagation();
+                finish();
+            }
+        };
+        window.addEventListener('keydown', this._onKey, true);
 
         cam.position.set(0, 220, 360);
         ctrl.target.set(0, 0, 0);
@@ -59,7 +67,7 @@ export class Onboarding {
 
     _removeSkip() {
         if (this._skipEl) { this._skipEl.remove(); this._skipEl = null; }
-        if (this._onKey) { window.removeEventListener('keydown', this._onKey); this._onKey = null; }
+        if (this._onKey) { window.removeEventListener('keydown', this._onKey, true); this._onKey = null; }
     }
 
     // Astuce one-shot

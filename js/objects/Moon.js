@@ -17,15 +17,17 @@ export class Moon {
 
     create() {
         const geometry = new THREE.SphereGeometry(this.data.rayon, 32, 32);
+        // Vraie texture si disponible (la Lune), sinon texture procédurale
+        const map = this.data.texture ? this.loadTexture(this.data.texture) : this.createTexture();
         const material = new THREE.MeshStandardMaterial({
-            map: this.createTexture(),
+            map,
+            bumpMap: this.data.texture ? map : null,
+            bumpScale: 1.5,
             roughness: 0.95,
             metalness: 0.0
         });
 
         this.mesh = new THREE.Mesh(geometry, material);
-        this.mesh.castShadow = true;
-        this.mesh.receiveShadow = true;
         this.updatePosition();
         // Attaché au group (pas au tiltGroup) : orbite simplifiée dans le plan écliptique
         this.planet.group.add(this.mesh);
@@ -81,6 +83,13 @@ export class Moon {
         };
         this.updatePosition();
         this.rebuildOrbit();
+    }
+
+    loadTexture(url) {
+        const texture = new THREE.TextureLoader().load(url);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 8;
+        return texture;
     }
 
     createTexture() {

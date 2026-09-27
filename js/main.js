@@ -16,6 +16,9 @@ import { Interactions } from './core/Interactions.mjs';
 import { formatTooltip } from './ui/tooltip.mjs';
 import { Onboarding, shouldPlayIntro } from './ui/Onboarding.mjs';
 import { CINEMATIC_CONSTELLATIONS } from './data/constellations.mjs';
+import { frameScale } from './core/TimeStep.mjs';
+
+const DEFAULT_MIN_DISTANCE = 8;
 
 class App {
     constructor() {
@@ -103,7 +106,8 @@ class App {
             onCameraReset: () => {
                 this.focusedPlanetKey = null;
                 this.cameraFollowingStarship = false;
-                this.focusTweening = false;
+                this.stopFocusTween();
+                this.sceneManager.controls.minDistance = DEFAULT_MIN_DISTANCE;
                 gsap.killTweensOf(camera.position);
                 gsap.killTweensOf(this.sceneManager.controls.target);
 
@@ -248,7 +252,9 @@ class App {
             showTip();
         }
 
-        // 8. Démarrer la boucle de rendu
+        // 8. Démarrer la boucle de rendu (horloge réelle, en pause onglet caché)
+        this.timer = new THREE.Timer();
+        this.timer.connect(document);
         this.animate();
     }
 
@@ -321,6 +327,8 @@ class App {
         centroid.multiplyScalar(1 / cst.stars.length);
 
         // Orienter la caméra vers le centre de la constellation avec animation fluide
+        this.stopFocusTween();
+        this.sceneManager.controls.minDistance = DEFAULT_MIN_DISTANCE;
         gsap.killTweensOf(this.sceneManager.camera.position);
         gsap.killTweensOf(this.sceneManager.controls.target);
 
@@ -349,9 +357,18 @@ class App {
         this.isPaused = false;
         this.focusedPlanetKey = null;
         this.cameraFollowingStarship = false;
+        this.stopFocusTween();
+        this.sceneManager.controls.minDistance = DEFAULT_MIN_DISTANCE;
 
         const speedSlider = document.getElementById('speed-slider');
         if (speedSlider) speedSlider.value = 50;
+        const speedValue = document.getElementById('speed-value');
+        if (speedValue) speedValue.textContent = '×1.0';
+        const followBtn = document.getElementById('follow-starship');
+        if (followBtn) {
+            followBtn.classList.remove('active');
+            followBtn.textContent = 'Suivre StarShip';
+        }
 
         const pauseBtn = document.getElementById('pause-btn');
         if (pauseBtn) {
@@ -368,6 +385,8 @@ class App {
         // Réinitialiser le Starship vers la Terre
         this.starship.destroy();
         this.starship = new Starship(this.sceneManager.scene, 'terre', { ...this.planets, ...this.moons });
+        this.starship.group.visible = false;
+        this.starship.particlesGroup.visible = false;
         const toggleBtn = document.getElementById('toggle-starship');
         if (toggleBtn) {
             toggleBtn.classList.remove('active');
@@ -396,8 +415,8 @@ class App {
             temperature: facts.temperature,
             color: facts.color,
             description: body.data.description || '',
-            // Pour la mini-preview (null = couleur unie)
-            texture: (body.getPreviewTexture ? body.getPreviewTexture() : body.mesh.material.map) || null
+            // Pour la mini-preview (map absente = couleur unie)
+            textures: body.getPreviewTextures ? body.getPreviewTextures() : { map: body.mesh.material.map }
         };
     }
 
@@ -436,32 +455,63 @@ class App {
         });
     }
 
-    // Vol de caméra eased vers le cadrage d'un corps (interruptible)
+    // Position de caméra qui cadre un corps : côté éclairé (entre le Soleil et
+    // le corps), décalée latéralement pour un éclairage en trois-quarts
+    framedCameraPosition(key, pos, dist) {
+        if (key === 'soleil') {
+            return pos.clone().add(new THREE.Vector3(dist, dist * 0.4, dist));
+        }
+        const dirToSun = pos.clone().negate().normalize();
+        const side = new THREE.Vector3().crossVectors(dirToSun, new THREE.Vector3(0, 1, 0)).normalize();
+        return pos.clone()
+            .addScaledVector(dirToSun, dist * 0.8)
+            .addScaledVector(side, dist * 0.5)
+            .add(new THREE.Vector3(0, dist * 0.35, 0));
+    }
+
+    stopFocusTween() {
+        if (this.focusTween) this.focusTween.kill();
+        this.focusTween = null;
+        this.focusTweening = false;
+    }
+
+    // Vol de caméra eased vers le cadrage d'un corps (interruptible). La cible est
+    // recalculée à chaque image : le corps continue d'orbiter pendant le vol.
     cinematicFocus(key) {
         const target = this.getFocusTarget(key);
         if (!target) return;
-        const { pos, dist } = target;
-        const dirToSun = pos.clone().negate().normalize();
-        const side = new THREE.Vector3().crossVectors(dirToSun, new THREE.Vector3(0, 1, 0)).normalize();
-        const camPos = key === 'soleil'
-            ? pos.clone().add(new THREE.Vector3(dist, dist * 0.4, dist))
-            : pos.clone().addScaledVector(dirToSun, dist * 0.8).addScaledVector(side, dist * 0.5).add(new THREE.Vector3(0, dist * 0.35, 0));
+        const camera = this.sceneManager.camera;
+        const controls = this.sceneManager.controls;
+        const startCam = camera.position.clone();
+        const startTarget = controls.target.clone();
 
+        this.stopFocusTween();
+        gsap.killTweensOf(camera.position);
+        gsap.killTweensOf(controls.target);
         this.focusTweening = true;
-        gsap.killTweensOf(this.sceneManager.camera.position);
-        gsap.killTweensOf(this.sceneManager.controls.target);
-        gsap.to(this.sceneManager.camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.4, ease: 'power3.inOut' });
-        gsap.to(this.sceneManager.controls.target, {
-            x: pos.x, y: pos.y, z: pos.z, duration: 1.4, ease: 'power3.inOut',
-            onComplete: () => { this.focusTweening = false; }
+        const progress = { t: 0 };
+        this.focusTween = gsap.to(progress, {
+            t: 1, duration: 1.4, ease: 'power3.inOut',
+            onUpdate: () => {
+                const current = this.getFocusTarget(key);
+                if (!current) return;
+                camera.position.lerpVectors(startCam, this.framedCameraPosition(key, current.pos, current.dist), progress.t);
+                controls.target.lerpVectors(startTarget, current.pos, progress.t);
+            },
+            onComplete: () => { this.focusTween = null; this.focusTweening = false; }
         });
-        this.spawnFocusRipple(pos, key === 'soleil' ? 6 : (this.planets[key] ? this.planets[key].data.rayon : 1));
+        // Zoom avant possible jusqu'à frôler la surface du corps
+        const body = this.planets[key] || this.moons[key];
+        controls.minDistance = body.data.rayon * 1.6;
+        this.spawnFocusRipple(target.pos, key === 'soleil' ? 6 : (this.planets[key] ? this.planets[key].data.rayon : 1));
     }
 
     animate() {
         requestAnimationFrame(this.animate.bind(this));
 
-        const speed = this.isPaused ? 0 : this.simulationSpeed;
+        // Vitesse × nombre d'images de référence (60 Hz) écoulées : indépendant de l'écran
+        this.timer.update();
+        const speed = (this.isPaused ? 0 : this.simulationSpeed) * frameScale(this.timer.getDelta());
 
         // 1. Mettre à jour les planètes puis les lunes
         for (const planet of Object.values(this.planets)) {
@@ -495,27 +545,13 @@ class App {
         const controls = this.sceneManager.controls;
 
         if (this.focusedPlanetKey && !this.focusTweening) {
+            // Suivre le corps en translatant caméra et cible de son déplacement :
+            // le zoom et la rotation de l'utilisateur sont conservés
             const target = this.getFocusTarget(this.focusedPlanetKey);
             if (target) {
-                const { pos, dist } = target;
-                let targetCamPos;
-
-                if (this.focusedPlanetKey === 'soleil') {
-                    targetCamPos = pos.clone().add(new THREE.Vector3(dist, dist * 0.4, dist));
-                } else {
-                    // Se placer du côté éclairé : entre le Soleil (origine) et le corps,
-                    // décalé latéralement pour un éclairage en trois-quarts
-                    const dirToSun = pos.clone().negate().normalize();
-                    const side = new THREE.Vector3().crossVectors(dirToSun, new THREE.Vector3(0, 1, 0)).normalize();
-                    targetCamPos = pos.clone()
-                        .addScaledVector(dirToSun, dist * 0.8)
-                        .addScaledVector(side, dist * 0.5)
-                        .add(new THREE.Vector3(0, dist * 0.35, 0));
-                }
-
-                // Lerp très fluide
-                camera.position.lerp(targetCamPos, 0.05);
-                controls.target.lerp(pos, 0.05);
+                const delta = target.pos.sub(controls.target);
+                camera.position.add(delta);
+                controls.target.add(delta);
             }
         }
         else if (this.cameraFollowingStarship && this.starship && this.starship.group.visible) {

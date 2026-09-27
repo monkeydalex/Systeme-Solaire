@@ -612,8 +612,8 @@ export class SpecialEffectsManager {
             nebula.material.rotation += 0.0001 * speed;
         }
 
-        // 3. Météores : spawn uniquement si l'effet est activé
-        if (this.meteorsActive) {
+        // 3. Météores : spawn uniquement si l'effet est activé et la simulation en marche
+        if (this.meteorsActive && speed > 0) {
             const now = Date.now();
             if (now > this.nextMeteorTime && this.meteors.length < 15) {
                 this.createMeteor();
