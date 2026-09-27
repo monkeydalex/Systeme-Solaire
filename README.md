@@ -2,6 +2,8 @@
 
 Simulation 3D interactive du système solaire (Three.js + Vite), à des fins éducatives.
 
+**▶ Démo en ligne : https://monkeydalex.github.io/Systeme-Solaire/**
+
 ## Fonctionnalités
 
 - Soleil animé par shader (convection, granulation) avec couronne et bloom
